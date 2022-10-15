@@ -6,3 +6,4 @@
 - [ ] macros
 - [ ] labels can probably not start with an A or a D right now, probably other problems
 - [ ] write tests for all opcodes and addressing modes
+- [ ] documentation
