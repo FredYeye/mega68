@@ -1,3 +1,5 @@
+#![allow(clippy::upper_case_acronyms)]
+
 use crate::Log;
 
 use super::{parse_n, OpSize, OpType, Value, CCR_MASK, MOVEM_MASK, SR_MASK, USP_MASK};
@@ -48,10 +50,7 @@ impl AddressingMode {
                     _ => 2,
                 },
 
-                Self::BranchDisplacement(size, _) => match size {
-                    OpSize::W => 2,
-                    _ => 0,
-                },
+                Self::BranchDisplacement(OpSize::W, _) => 2,
 
                 _ => 0,
             };
@@ -214,9 +213,9 @@ impl AddressingList {
 }
 
 pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, last_label: &str) -> Result<AddressingMode, Log> {
-    Ok(if token.starts_with("#") {
+    Ok(if let Some(imm) = token.strip_prefix('#') {
         //todo: fine to simply pass opsize as imm size?
-        match parse_n(&token[1..]) {
+        match parse_n(imm) {
             Ok(val) => match opcode {
                 OpType::MoveQ | OpType::Rotation(_, _) | OpType::AddSubQ(_) | OpType::Trap => {
                     AddressingMode::DataQuick(val as u8)
@@ -226,13 +225,13 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
 
             Err(e) => return Err(e),
         }
-    } else if token.to_uppercase().starts_with("D") {
+    } else if token.to_uppercase().starts_with('D') {
         if let Ok(Some(mask)) = movem(token) {
             return Ok(AddressingMode::RegisterList(mask));
         }
 
         AddressingMode::DataRegister(parse_reg(&token[1..])?)
-    } else if token.to_uppercase().starts_with("A") {
+    } else if token.to_uppercase().starts_with('A') {
         if let Ok(Some(mask)) = movem(token) {
             return Ok(AddressingMode::RegisterList(mask));
         }
@@ -240,22 +239,22 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
         AddressingMode::AddressRegister(parse_reg(&token[1..])?)
     } else if token.starts_with("-(") {
         AddressingMode::AddressPredecrement(parse_reg(&token[3..token.len() - 1])?)
-    } else if token.ends_with("+") {
+    } else if token.ends_with('+') {
         AddressingMode::AddressPostincrement(parse_reg(&token[2..token.len() - 2])?)
-    } else if token.starts_with("(") {
+    } else if token.starts_with('(') {
         if &token[1..=1].to_uppercase() == "A" {
             AddressingMode::Address(parse_reg(&token[2..token.len() - 1])?)
         } else {
-            let commas: Vec<_> = token.match_indices(",").collect();
+            let commas: Vec<_> = token.match_indices(',').collect();
 
-            if commas.len() > 0 {
+            if !commas.is_empty() {
                 if token[commas[0].0..token.len()]
                     .to_uppercase()
                     .contains("PC")
                 {
                     match commas.len() {
                         1 => {
-                            let disp = match parse_n(&token[1..commas[0].0].trim()) {
+                            let disp = match parse_n(token[1..commas[0].0].trim()) {
                                 Ok(val) => val as i16,
                                 Err(e) => return Err(e),
                             };
@@ -264,7 +263,7 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
                         }
 
                         2 => {
-                            let disp = match parse_n(&token[1..commas[0].0].trim()) {
+                            let disp = match parse_n(token[1..commas[0].0].trim()) {
                                 Ok(val) => val as i8,
                                 Err(e) => return Err(e),
                             };
@@ -300,7 +299,7 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
                 } else {
                     match commas.len() {
                         1 => {
-                            let disp = match parse_n(&token[1..commas[0].0].trim()) {
+                            let disp = match parse_n(token[1..commas[0].0].trim()) {
                                 Ok(val) => val as i16,
                                 Err(e) => return Err(e),
                             };
@@ -310,15 +309,14 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
                             AddressingMode::AddressDisplacement(disp, reg)
                         }
 
-                        2 => {
-                            //AddressIndex
-                            let disp = match parse_n(&token[1..commas[0].0].trim()) {
+                        2 => { //AddressIndex
+                            let disp = match parse_n(token[1..commas[0].0].trim()) {
                                 Ok(val) => val as i8,
                                 Err(e) => return Err(e),
                             };
 
                             let second = token[commas[0].0 + 1..commas[1].0].trim();
-                            if second.starts_with('A') == false {
+                            if !second.starts_with('A') {
                                 todo!("error")
                             }
 
@@ -360,44 +358,40 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
         AddressingMode::CCR
     } else if token.to_uppercase() == "SR" {
         AddressingMode::SR
+    } else if token.to_lowercase().ends_with(".w") { //explicit word
+        match parse_n(&token[..token.len() - 2]) {
+            Ok(val) => AddressingMode::AbsoluteShort(val as u16),
+            Err(e) => return Err(e),
+        }
+    } else if token.to_lowercase().ends_with(".l") { //explicit long
+        match parse_n(&token[..token.len() - 2]) {
+            Ok(val) => AddressingMode::AbsoluteLong(Value::Number(val)),
+            Err(e) => return Err(e),
+        }
     } else {
-        if token.to_lowercase().ends_with(".w") {
-            //explicit word
-            match parse_n(&token[..token.len() - 2]) {
-                Ok(val) => AddressingMode::AbsoluteShort(val as u16),
-                Err(e) => return Err(e),
+        let value = match parse_n(token) {
+            Ok(number) => Value::Number(number),
+
+            Err(_) => {
+                if let Some(define) = token.strip_prefix('!') {
+                    Value::Define(define.to_string())
+                } else if token.starts_with('.') {
+                    let mut sub_label = last_label.to_string();
+                    sub_label.push_str(token);
+                    Value::Label(sub_label)
+                } else {
+                    Value::Label(token.to_string())
+                }
             }
-        } else if token.to_lowercase().ends_with(".l") {
-            //explicit long
-            match parse_n(&token[..token.len() - 2]) {
-                Ok(val) => AddressingMode::AbsoluteLong(Value::Number(val)),
-                Err(e) => return Err(e),
+        };
+
+        match opcode {
+            OpType::Branch(_) | OpType::Dbcc(_) => {
+                AddressingMode::BranchDisplacement(size, value)
             }
-        } else {
-            let value = match parse_n(token) {
-                Ok(number) => Value::Number(number),
 
-                Err(_) => {
-                    if token.starts_with('!') {
-                        Value::Define(token[1..].to_string())
-                    } else if token.starts_with('.') {
-                        let mut sub_label = last_label.to_string();
-                        sub_label.push_str(token);
-                        Value::Label(sub_label)
-                    } else {
-                        Value::Label(token.to_string())
-                    }
-                }
-            };
-
-            match opcode {
-                OpType::Branch(_) | OpType::Dbcc(_) => {
-                    AddressingMode::BranchDisplacement(size, value)
-                }
-
-                _ => {
-                    AddressingMode::AbsoluteLong(value) //todo: pick short/long based on value
-                }
+            _ => {
+                AddressingMode::AbsoluteLong(value) //todo: pick short/long based on value
             }
         }
     })
@@ -433,9 +427,9 @@ fn movem(token: &str) -> Result<Option<u16>, Log> {
                     mask |= 1 << x;
                 }
             } else {
-                let base = if thing.starts_with("D") {
+                let base = if thing.starts_with('D') {
                     0
-                } else if thing.starts_with("A") {
+                } else if thing.starts_with('A') {
                     8
                 } else {
                     todo!()

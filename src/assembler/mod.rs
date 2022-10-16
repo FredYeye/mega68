@@ -1,9 +1,12 @@
+#![allow(clippy::unusual_byte_groupings)]
+
 const CCR_MASK:   u16 = 0b0001_000_000;
 const SR_MASK:    u16 = 0b0010_000_000;
 const USP_MASK:   u16 = 0b0100_000_000;
 const MOVEM_MASK: u16 = 0b1000_000_000;
 
-const MODE_MASK:  u16 = 0b111_000;
+const MODE_MASK: u16 = 0b111_000;
+const ADDRESS_REGISTER_MASK: u16 = 0b001_000;
 
 mod addressing;
 mod opsize;
@@ -47,17 +50,18 @@ impl Value {
 
             Value::Label(label) => match labels.get(label) {
                 Some(val) => Ok(*val),
-                None => return Err(Log::NoLabel),
+                None => Err(Log::NoLabel),
             },
 
             Value::Define(name) => match defines.get(name) {
                 Some(val) => Ok(*val),
-                None => return Err(Log::NoDefine),
+                None => Err(Log::NoDefine),
             },
         }
     }
 }
 
+#[derive(Default)]
 pub struct Assembler {
     tokens: Vec<Decoded>,
     assembled: Vec<u16>,
@@ -66,20 +70,6 @@ pub struct Assembler {
     labels: HashMap<String, u32>,
     last_label: String,
     defines: HashMap<String, u32>,
-}
-
-impl Default for Assembler {
-    fn default() -> Self {
-        Self {
-            tokens: Vec::new(),
-            assembled: Vec::new(),
-            location: 0,
-            line: 0,
-            labels: HashMap::new(),
-            last_label: String::new(),
-            defines: HashMap::new(),
-        }
-    }
 }
 
 impl Assembler {
@@ -92,7 +82,7 @@ impl Assembler {
         for token in &self.tokens {
             // println!("{:?}", token);
 
-            match self.assemble(&token) {
+            match self.assemble(token) {
                 Ok(o) => self.assembled.extend(o),
                 Err(e) => return Err((e, token.line)),
             }
@@ -109,7 +99,7 @@ impl Assembler {
 
             let separated_op: Vec<&str> = trimmed_str.splitn(2, ' ').collect();
 
-            if separated_op[0].is_empty() == true {
+            if separated_op[0].is_empty() {
                 continue;
             }
 
@@ -207,8 +197,8 @@ impl Assembler {
             } else if separated_op[0].starts_with('!') {
                 let define_val = separated_op[1].trim_start();
 
-                if define_val.starts_with('=') {
-                    let val = parse_n(define_val[1..].trim_start())?;
+                if let Some(define) = define_val.strip_prefix('=') {
+                    let val = parse_n(define.trim_start())?;
                     self.defines.insert(separated_op[0][1..].to_string(), val);
                 }
 
@@ -224,7 +214,7 @@ impl Assembler {
             let mut operands = [None, None];
 
             if separated_op.len() > 1 {
-                let commas: Vec<_> = separated_op[1].match_indices(",").collect();
+                let commas: Vec<_> = separated_op[1].match_indices(',').collect();
 
                 if commas.is_empty() {
                     //one operand
@@ -323,7 +313,7 @@ impl Assembler {
 
         for (x, mode) in modes.iter_mut().enumerate() {
             *mode = match &tokens.operands[x] {
-                Some(operand) => addressing::determine_addressing_mode(&operand, &opcode, size, &self.last_label)?,
+                Some(operand) => addressing::determine_addressing_mode(operand, &opcode, size, &self.last_label)?,
                 None => AddressingMode::Empty,
             };
 
@@ -443,11 +433,11 @@ impl Assembler {
             AddSubQ(_) => {
                 let imm = ea_a2[0];
 
-                if (1..=8).contains(&imm) == false {
+                if !(1..=8).contains(&imm) {
                     todo!("addq/subq immediate out of range")
                 }
 
-                if ea_b1 & (0b001 << 3) == 0b001 && op.op_size == OpSize::W {
+                if ea_b1 & MODE_MASK == ADDRESS_REGISTER_MASK && op.op_size == OpSize::W {
                     println!("info: addq.w/subq.w will operate on the entire address register");
                 }
 
@@ -545,10 +535,8 @@ impl Assembler {
                     if ea_b1 & MODE_MASK == 0b000_000 {
                         todo!("error")
                     }
-                } else if op.op_size == L {
-                    if op1.0 & MODE_MASK != 0b000_000 {
-                        todo!("error")
-                    }
+                } else if op.op_size == L && op1.0 & MODE_MASK != 0b000_000 {
+                    todo!("error")
                 }
 
                 let mut format = vec![op.op_type.format() | op1.0 | ea_b1];

@@ -1,3 +1,5 @@
+#![allow(clippy::unusual_byte_groupings, clippy::upper_case_acronyms)]
+
 use crate::Log;
 
 use super::{addressing::AddressingList, addressing::AddressingMode, OpSize};
@@ -443,13 +445,11 @@ impl OpType {
 
         for (valid_list, mode) in valid_addr_lists.iter().zip(modes) {
             if let Some(valid_list2) = valid_list {
-                if valid_list2.check_mode(&mode) == false {
+                if !valid_list2.check_mode(mode) {
                     todo!("invalid addressing mode");
                 }
-            } else {
-                if *mode != AddressingMode::Empty {
-                    todo!("invalid addressing mode (too many operands)");
-                }
+            } else if *mode != AddressingMode::Empty {
+                todo!("invalid addressing mode (too many operands)");
             }
         }
     }
