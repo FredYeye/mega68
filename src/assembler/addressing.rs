@@ -1,6 +1,6 @@
 use crate::Log;
 
-use super::{OpSize, OpType, parse_n, Value, CCR_MASK, SR_MASK, USP_MASK, MOVEM_MASK};
+use super::{parse_n, OpSize, OpType, Value, CCR_MASK, MOVEM_MASK, SR_MASK, USP_MASK};
 
 #[derive(Debug, PartialEq)]
 pub enum AddressingMode {
@@ -34,18 +34,18 @@ impl AddressingMode {
 
         for mode in modes {
             count += match mode {
-                Self::AddressDisplacement(_, _)   |
-                Self::AddressIndex(_, _, _, _, _) |
-                Self::PCDisplacement(_)           |
-                Self::PCIndex(_, _, _, _)         |
-                Self::AbsoluteShort(_)            |
-                Self::RegisterList(_)             => 2,
+                Self::AddressDisplacement(_, _)
+                | Self::AddressIndex(_, _, _, _, _)
+                | Self::PCDisplacement(_)
+                | Self::PCIndex(_, _, _, _)
+                | Self::AbsoluteShort(_)
+                | Self::RegisterList(_) => 2,
 
                 Self::AbsoluteLong(_) => 4,
 
                 Self::Immediate(size, _) => match size {
                     OpSize::L => 4,
-                    _         => 2,
+                    _ => 2,
                 },
 
                 Self::BranchDisplacement(size, _) => match size {
@@ -88,27 +88,31 @@ impl AddressingMode {
         let ea = match self {
             AddressingMode::DataRegister(reg) => (0b000, *reg, vec![]),
             AddressingMode::AddressRegister(reg) => (0b001, *reg, vec![]),
-    
-            AddressingMode::Address(reg)              => (0b010, *reg, vec![]),
+
+            AddressingMode::Address(reg) => (0b010, *reg, vec![]),
             AddressingMode::AddressPostincrement(reg) => (0b011, *reg, vec![]),
-            AddressingMode::AddressPredecrement(reg)  => (0b100, *reg, vec![]),
+            AddressingMode::AddressPredecrement(reg) => (0b100, *reg, vec![]),
             AddressingMode::AddressDisplacement(disp, reg) => (0b101, *reg, vec![*disp as u16]),
-    
-            AddressingMode::AddressIndex(disp, reg_a, reg, reg_type, reg_size) => {
-                (0b110, *reg_a, vec![((*reg_type as u16) << 15) | ((*reg as u16) << 12) | ((*reg_size as u16) << 11) | *disp as u16])
-            }
-    
+
+            AddressingMode::AddressIndex(disp, reg_a, reg, reg_type, reg_size) => (
+                0b110,
+                *reg_a,
+                vec![((*reg_type as u16) << 15) | ((*reg as u16) << 12) | ((*reg_size as u16) << 11) | *disp as u16],
+            ),
+
             AddressingMode::PCDisplacement(disp) => (0b111, 0b010, vec![*disp as u16]),
-            AddressingMode::PCIndex(disp, reg, reg_type, reg_size) => {
-                (0b111, 0b011, vec![((*reg_type as u16) << 15) | ((*reg as u16) << 12) | ((*reg_size as u16) << 11) | *disp as u16])
-            }
-    
+            AddressingMode::PCIndex(disp, reg, reg_type, reg_size) => (
+                0b111,
+                0b011,
+                vec![((*reg_type as u16) << 15) | ((*reg as u16) << 12) | ((*reg_size as u16) << 11) | *disp as u16],
+            ),
+
             AddressingMode::AbsoluteShort(addr) => (0b111, 0b000, vec![*addr]),
             AddressingMode::AbsoluteLong(value) => {
                 let addr = value.resolve_value(labels, defines)?;
                 (0b111, 0b001, vec![(addr >> 16) as u16, addr as u16])
             }
-    
+
             AddressingMode::Immediate(size, value) => {
                 //todo: warn if value exceeds size
                 (
@@ -119,30 +123,30 @@ impl AddressingMode {
                         OpSize::W => vec![*value as u16],
                         OpSize::L => vec![(value >> 16) as u16, *value as u16],
                         _ => unreachable!(),
-                    }
+                    },
                 )
             }
-    
+
             AddressingMode::BranchDisplacement(op_size, value) => {
                 let size = match op_size {
                     OpSize::B => 0,
                     OpSize::W => 1,
                     _ => todo!(),
                 };
-    
+
                 (0, size, vec![value.resolve_value(labels, defines)? as u16])
             }
-    
+
             AddressingMode::CCR => (CCR_MASK >> 3, 0, vec![]),
             AddressingMode::SR => (SR_MASK >> 3, 0, vec![]),
             AddressingMode::USP => (USP_MASK >> 3, 0, vec![]),
-            AddressingMode::RegisterList(mask) => (MOVEM_MASK >> 3, 0,  vec![*mask]),
+            AddressingMode::RegisterList(mask) => (MOVEM_MASK >> 3, 0, vec![*mask]),
             AddressingMode::DataQuick(imm) => (0, 0, vec![*imm as u16]),
             AddressingMode::Empty => (0b111, 0b111, vec![]),
         };
-    
+
         Ok(((ea.0 << 3) | ea.1 as u16, ea.2))
-    }    
+    }
 }
 
 pub enum AddressingList {
@@ -175,7 +179,7 @@ pub enum AddressingList {
 }
 
 impl AddressingList {
-    pub fn mask_test(&self, mode: &AddressingMode) -> bool {
+    pub fn check_mode(&self, mode: &AddressingMode) -> bool {
         let list_mask = match self {
             Self::All                   => 0b0_000_000_111111111111,
             Self::Alterable             => 0b0_000_000_011111111111,
@@ -210,53 +214,48 @@ impl AddressingList {
 }
 
 pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, last_label: &str) -> Result<AddressingMode, Log> {
-    Ok( if token.starts_with("#") {
+    Ok(if token.starts_with("#") {
         //todo: fine to simply pass opsize as imm size?
         match parse_n(&token[1..]) {
-            Ok(val) => {
-                match opcode {
-                    OpType::MoveQ |
-                    OpType::Rotation(_, _) |
-                    OpType::AddSubQ(_) |
-                    OpType::Trap => AddressingMode::DataQuick(val as u8),
-                    _ => AddressingMode::Immediate(size, val),
+            Ok(val) => match opcode {
+                OpType::MoveQ | OpType::Rotation(_, _) | OpType::AddSubQ(_) | OpType::Trap => {
+                    AddressingMode::DataQuick(val as u8)
                 }
-            }
+                _ => AddressingMode::Immediate(size, val),
+            },
 
             Err(e) => return Err(e),
         }
-    }
-    else if token.to_uppercase().starts_with("D") {
+    } else if token.to_uppercase().starts_with("D") {
         if let Ok(Some(mask)) = movem(token) {
             return Ok(AddressingMode::RegisterList(mask));
         }
 
         AddressingMode::DataRegister(parse_reg(&token[1..])?)
-    }
-    else if token.to_uppercase().starts_with("A") {
+    } else if token.to_uppercase().starts_with("A") {
         if let Ok(Some(mask)) = movem(token) {
             return Ok(AddressingMode::RegisterList(mask));
         }
 
         AddressingMode::AddressRegister(parse_reg(&token[1..])?)
-    }
-    else if token.starts_with("-(") {
-        AddressingMode::AddressPredecrement(parse_reg(&token[3 .. token.len() - 1])?)
-    }
-    else if token.ends_with("+") {
-        AddressingMode::AddressPostincrement(parse_reg(&token[2 .. token.len() - 2])?)
-    }
-    else if token.starts_with("(") {
-        if &token[1 ..= 1].to_uppercase() == "A" {
-            AddressingMode::Address(parse_reg(&token[2 .. token.len() - 1])?)
+    } else if token.starts_with("-(") {
+        AddressingMode::AddressPredecrement(parse_reg(&token[3..token.len() - 1])?)
+    } else if token.ends_with("+") {
+        AddressingMode::AddressPostincrement(parse_reg(&token[2..token.len() - 2])?)
+    } else if token.starts_with("(") {
+        if &token[1..=1].to_uppercase() == "A" {
+            AddressingMode::Address(parse_reg(&token[2..token.len() - 1])?)
         } else {
             let commas: Vec<_> = token.match_indices(",").collect();
 
             if commas.len() > 0 {
-                if token[commas[0].0 .. token.len()].to_uppercase().contains("PC") {
+                if token[commas[0].0..token.len()]
+                    .to_uppercase()
+                    .contains("PC")
+                {
                     match commas.len() {
                         1 => {
-                            let disp = match parse_n(&token[1 .. commas[0].0].trim()) {
+                            let disp = match parse_n(&token[1..commas[0].0].trim()) {
                                 Ok(val) => val as i16,
                                 Err(e) => return Err(e),
                             };
@@ -265,12 +264,12 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
                         }
 
                         2 => {
-                            let disp = match parse_n(&token[1 .. commas[0].0].trim()) {
+                            let disp = match parse_n(&token[1..commas[0].0].trim()) {
                                 Ok(val) => val as i8,
                                 Err(e) => return Err(e),
                             };
 
-                            let third = token[commas[1].0 + 1 .. token.len() - 1].trim();
+                            let third = token[commas[1].0 + 1..token.len() - 1].trim();
 
                             let reg_type = if third.starts_with('D') {
                                 false
@@ -288,7 +287,12 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
                                 todo!("error")
                             };
 
-                            AddressingMode::PCIndex(disp, parse_reg(&third[1 ..= 1])?, reg_type, reg_size)
+                            AddressingMode::PCIndex(
+                                disp,
+                                parse_reg(&third[1..=1])?,
+                                reg_type,
+                                reg_size,
+                            )
                         }
 
                         _ => todo!("error"),
@@ -296,28 +300,29 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
                 } else {
                     match commas.len() {
                         1 => {
-                            let disp = match parse_n(&token[1 .. commas[0].0].trim()) {
+                            let disp = match parse_n(&token[1..commas[0].0].trim()) {
                                 Ok(val) => val as i16,
                                 Err(e) => return Err(e),
                             };
 
-                            let second = token[commas[0].0 + 1 .. token.len() - 1].trim();
-                            let reg = parse_reg(&second[1 ..])?;
+                            let second = token[commas[0].0 + 1..token.len() - 1].trim();
+                            let reg = parse_reg(&second[1..])?;
                             AddressingMode::AddressDisplacement(disp, reg)
                         }
 
-                        2 => { //AddressIndex
-                            let disp = match parse_n(&token[1 .. commas[0].0].trim()) {
+                        2 => {
+                            //AddressIndex
+                            let disp = match parse_n(&token[1..commas[0].0].trim()) {
                                 Ok(val) => val as i8,
                                 Err(e) => return Err(e),
                             };
 
-                            let second = token[commas[0].0 + 1 .. commas[1].0].trim();
+                            let second = token[commas[0].0 + 1..commas[1].0].trim();
                             if second.starts_with('A') == false {
                                 todo!("error")
                             }
 
-                            let third = token[commas[1].0 + 1 .. token.len() - 1].trim();
+                            let third = token[commas[1].0 + 1..token.len() - 1].trim();
 
                             let reg_type = if third.starts_with('D') {
                                 false
@@ -332,13 +337,13 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
                             } else if third.to_lowercase().ends_with(".l") {
                                 true
                             } else {
-                                return Err(Log::IndexRegisterInvalidSize)
+                                return Err(Log::IndexRegisterInvalidSize);
                             };
 
                             AddressingMode::AddressIndex(
                                 disp,
-                                parse_reg(&second[1 ..= 1])?,
-                                parse_reg(&third[1 ..= 1])?,
+                                parse_reg(&second[1..=1])?,
+                                parse_reg(&third[1..=1])?,
                                 reg_type,
                                 reg_size,
                             )
@@ -351,20 +356,20 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
                 todo!("error");
             }
         }
-    }
-    else if token.to_uppercase() == "CCR" {
+    } else if token.to_uppercase() == "CCR" {
         AddressingMode::CCR
-    }
-    else if token.to_uppercase() == "SR" {
+    } else if token.to_uppercase() == "SR" {
         AddressingMode::SR
     } else {
-        if token.to_lowercase().ends_with(".w") { //explicit word
-            match parse_n(&token[.. token.len() - 2]) {
+        if token.to_lowercase().ends_with(".w") {
+            //explicit word
+            match parse_n(&token[..token.len() - 2]) {
                 Ok(val) => AddressingMode::AbsoluteShort(val as u16),
                 Err(e) => return Err(e),
             }
-        } else if token.to_lowercase().ends_with(".l") { //explicit long
-            match parse_n(&token[.. token.len() - 2]) {
+        } else if token.to_lowercase().ends_with(".l") {
+            //explicit long
+            match parse_n(&token[..token.len() - 2]) {
                 Ok(val) => AddressingMode::AbsoluteLong(Value::Number(val)),
                 Err(e) => return Err(e),
             }
@@ -386,7 +391,9 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
             };
 
             match opcode {
-                OpType::Branch(_) | OpType::Dbcc(_) => AddressingMode::BranchDisplacement(size, value),
+                OpType::Branch(_) | OpType::Dbcc(_) => {
+                    AddressingMode::BranchDisplacement(size, value)
+                }
 
                 _ => {
                     AddressingMode::AbsoluteLong(value) //todo: pick short/long based on value
@@ -414,11 +421,11 @@ fn movem(token: &str) -> Result<Option<u16>, Log> {
                         todo!()
                     };
 
-                    let (x, y) = (parse_reg(&a[1..])? + base,  parse_reg(&b[1..])? + base);
+                    let (x, y) = (parse_reg(&a[1..])? + base, parse_reg(&b[1..])? + base);
 
                     match x <= y {
-                        true  => x ..= y,
-                        false => y ..= x,
+                        true  => x..=y,
+                        false => y..=x,
                     }
                 };
 
@@ -450,7 +457,7 @@ fn parse_reg(token: &str) -> Result<u8, Log> {
             if reg > 7 {
                 todo!("register out of range");
             }
-        
+
             Ok(reg as u8)
         }
 

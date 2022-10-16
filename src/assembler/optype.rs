@@ -1,6 +1,6 @@
 use crate::Log;
 
-use super::{OpSize, addressing::AddressingMode, addressing::AddressingList};
+use super::{addressing::AddressingList, addressing::AddressingMode, OpSize};
 
 #[derive(Debug)]
 pub enum OpType {
@@ -55,47 +55,37 @@ impl OpType {
             NoOperands(data) => *data,
             Immediates(imm) => (*imm as u16) << 9,
 
-            AddSub(add_sub) | AddSubA(add_sub) | AddSubX(add_sub) => {
-                match add_sub {
-                    false => 0b1101 << 12,
-                    true  => 0b1001 << 12,
-                }
-            }
+            AddSub(add_sub) | AddSubA(add_sub) | AddSubX(add_sub) => match add_sub {
+                false => 0b1101 << 12,
+                true  => 0b1001 << 12,
+            },
 
-            AddSubQ(add_sub) => {
-                match add_sub {
-                    false => 0b0101_0000 << 8,
-                    true  => 0b0101_0001 << 8,
-                }
-            }
+            AddSubQ(add_sub) => match add_sub {
+                false => 0b0101_0000 << 8,
+                true  => 0b0101_0001 << 8,
+            },
 
-            Jump(jxx) => {
-                match jxx {
-                    false => 0b0100111010 << 6,
-                    true  => 0b0100111011 << 6,
-                }
-            }
+            Jump(jxx) => match jxx {
+                false => 0b0100111010 << 6,
+                true  => 0b0100111011 << 6,
+            },
 
             Move => 0,
             MoveA => 0b001 << 6,
 
-            BCD(add_sub) => {
-                match add_sub {
-                    false => 0b1100_000_10000 << 4,
-                    true  => 0b1000_000_10000 << 4,
-                }
-            }
+            BCD(add_sub) => match add_sub {
+                false => 0b1100_000_10000 << 4,
+                true  => 0b1000_000_10000 << 4,
+            },
 
             BitManip(format) => (*format as u16) << 6,
 
             Misc1(format) => (*format as u16) << 8,
 
-            OrAnd(format) => {
-                match format {
-                    false => 0b1000 << 12,
-                    true  => 0b1100 << 12,
-                }
-            }
+            OrAnd(format) => match format {
+                false => 0b1000 << 12,
+                true  => 0b1100 << 12,
+            },
 
             MoveQ => 0b0111 << 12,
 
@@ -133,7 +123,7 @@ impl OpType {
     pub fn parse_op(op: &str) -> Result<Self, Log> {
         use OpType::*;
 
-        Ok( match op.to_lowercase().as_str() {
+        Ok(match op.to_lowercase().as_str() {
             "bra" => Branch(0b0000),
             "bsr" => Branch(0b0001),
             "bhi" => Branch(0b0010),
@@ -279,8 +269,8 @@ impl OpType {
     }
 
     pub fn valid_size(&self, size: OpSize) -> Result<(), Log> {
-        use OpType::*;
         use OpSize::*;
+        use OpType::*;
 
         let valid = match self {
             Branch(_)      => BW,
@@ -327,8 +317,7 @@ impl OpType {
 
         if size.mask() & valid.mask() == 0 {
             Err(Log::UnsupportedSuffix)
-        }
-        else {
+        } else {
             Ok(())
         }
     }
@@ -336,7 +325,7 @@ impl OpType {
     pub fn is_valid_modes(&self, modes: &[AddressingMode; 2]) {
         use AddressingList::*;
 
-        let valid_modes = match self {
+        let valid_addr_lists = match self {
             OpType::Branch(_) => [Some(Displacement), None],
             OpType::NoOperands(_) => [None, None],
 
@@ -347,8 +336,7 @@ impl OpType {
                     AddressingMode::CCR => {
                         if valid_ccr_sr_modes.contains(imm) {
                             [Some(Immediate), Some(CCR)]
-                        }
-                        else {
+                        } else {
                             todo!("error")
                         }
                     }
@@ -356,8 +344,7 @@ impl OpType {
                     AddressingMode::SR => {
                         if valid_ccr_sr_modes.contains(imm) {
                             [Some(Immediate), Some(SR)]
-                        }
-                        else {
+                        } else {
                             todo!("error")
                         }
                     }
@@ -366,25 +353,21 @@ impl OpType {
                 }
             }
 
-            OpType::AddSub(_) => {
-                match modes[1] {
-                    AddressingMode::DataRegister(_) => [Some(All), Some(DataRegister)],
-                    _ => [Some(DataRegister), Some(MemoryAlterable)],
-                }
-            }
+            OpType::AddSub(_) => match modes[1] {
+                AddressingMode::DataRegister(_) => [Some(All), Some(DataRegister)],
+                _ => [Some(DataRegister), Some(MemoryAlterable)],
+            },
 
-            OpType::AddSubA(_) => [Some(All), Some(AddressRegister)],
+            OpType::AddSubA(_) | OpType::MoveA | OpType::Cmpa => [Some(All), Some(AddressRegister)],
 
-            OpType::AddSubX(_) | OpType::BCD(_) => {
-                match modes[0] {
-                    AddressingMode::DataRegister(_) => [Some(DataRegister), Some(DataRegister)],
-                    _ => [Some(AddressPredecrement), Some(AddressPredecrement)],
-                }
-            }
+            OpType::AddSubX(_) | OpType::BCD(_) => match modes[0] {
+                AddressingMode::DataRegister(_) => [Some(DataRegister), Some(DataRegister)],
+                _ => [Some(AddressPredecrement), Some(AddressPredecrement)],
+            },
 
             OpType::AddSubQ(_) => [Some(DataQuick), Some(Alterable)],
 
-            OpType::Jump(_) => [Some(Control), None],
+            OpType::Jump(_) | OpType::Pea => [Some(Control), None],
 
             OpType::Move => {
                 match modes[0] {
@@ -401,82 +384,66 @@ impl OpType {
                 }
             }
 
-            OpType::MoveA => [Some(All), Some(AddressRegister)],
+            OpType::BitManip(_) => match modes[0] {
+                AddressingMode::DataRegister(_) => [Some(DataRegister), Some(DataAddressing)],
+                _ => [Some(Immediate), Some(DataAddressing2)],
+            },
 
-            OpType::BitManip(_) => {
-                match modes[0] {
-                    AddressingMode::DataRegister(_) => [Some(DataRegister), Some(DataAddressing)],
-                    _ => [Some(Immediate), Some(DataAddressing2)],
-                }
+            OpType::Misc1(_) | OpType::Tas | OpType::Scc(_) | OpType::Nbcd => {
+                [Some(DataAlterable), None]
             }
 
-            OpType::Misc1(_) => [Some(DataAlterable), None],
-
-            OpType::OrAnd(_) => {
-                match modes[1] {
-                    AddressingMode::DataRegister(_) => [Some(DataAddressing), Some(DataRegister)],
-                    _ => [Some(DataRegister), Some(MemoryAlterable)],
-                }
-            }
+            OpType::OrAnd(_) => match modes[1] {
+                AddressingMode::DataRegister(_) => [Some(DataAddressing), Some(DataRegister)],
+                _ => [Some(DataRegister), Some(MemoryAlterable)],
+            },
 
             OpType::MoveQ => [Some(DataQuick), Some(DataRegister)],
 
-            OpType::Rotation(_, _) => {
-                match modes[1] {
-                    AddressingMode::DataRegister(_) => [Some(DataRegisterDataQuick), Some(DataRegister)],
-                    _ => [Some(MemoryAlterable), None],
+            OpType::Rotation(_, _) => match modes[1] {
+                AddressingMode::DataRegister(_) => {
+                    [Some(DataRegisterDataQuick), Some(DataRegister)]
                 }
-            }
+                _ => [Some(MemoryAlterable), None],
+            },
 
             OpType::Lea => [Some(Control), Some(AddressRegister)],
             OpType::Chk => [Some(DataAddressing), Some(DataRegister)],
 
-            OpType::Exg => {
-                match modes[1] {
-                    AddressingMode::DataRegister(_) => [Some(DataRegister), Some(DataRegister)],
-                    _ => [Some(Register), Some(AddressRegister)],
-                }
-            }
+            OpType::Exg => match modes[1] {
+                AddressingMode::DataRegister(_) => [Some(DataRegister), Some(DataRegister)],
+                _ => [Some(Register), Some(AddressRegister)],
+            },
 
             OpType::Tst => [Some(All), None],
-            OpType::Ext => [Some(DataRegister), None],
-            OpType::Swap => [Some(DataRegister), None],
+            OpType::Ext | OpType::Swap => [Some(DataRegister), None],
             OpType::Unlk => [Some(AddressRegister), None],
             OpType::Link => [Some(AddressRegister), Some(Immediate)],
             OpType::Trap => [Some(DataQuick), None],
-            OpType::Tas => [Some(DataAlterable), None],
             OpType::Stop => [Some(Immediate), None],
-            OpType::Pea => [Some(Control), None],
 
-            OpType::Cmp  => [Some(All), Some(DataRegister)],
-            OpType::Cmpa => [Some(All), Some(AddressRegister)],
+            OpType::Cmp => [Some(All), Some(DataRegister)],
             OpType::Cmpm => [Some(AddressPostincrement), Some(AddressPostincrement)],
-            OpType::Scc(_) => [Some(DataAlterable), None],
-            OpType::Nbcd => [Some(DataAlterable), None],
             OpType::MulDiv(_) => [Some(DataAlterable), Some(DataRegister)],
             OpType::Eor => [Some(DataRegister), Some(DataAlterable)],
             OpType::Dbcc(_) => [Some(DataRegister), Some(Displacement)],
-            
-            OpType::Movep => {
-                match modes[0] {
-                    AddressingMode::DataRegister(_) => [Some(DataRegister), Some(AddressDisplacement)],
-                    _ => [Some(AddressDisplacement), Some(DataRegister)],
-                }
-            }
 
-            OpType::Movem => {
-                match modes [0] {
-                    AddressingMode::RegisterList(_) => [Some(RegisterList), Some(MovemDst)],
-                    _ => [Some(MovemSrc), Some(RegisterList)],
-                }
-            }
+            OpType::Movep => match modes[0] {
+                AddressingMode::DataRegister(_) => [Some(DataRegister), Some(AddressDisplacement)],
+                _ => [Some(AddressDisplacement), Some(DataRegister)],
+            },
+
+            OpType::Movem => match modes[0] {
+                AddressingMode::RegisterList(_) => [Some(RegisterList), Some(MovemDst)],
+                _ => [Some(MovemSrc), Some(RegisterList)],
+            },
 
             OpType::Data(_) => [None, None], //unused
         };
 
-        for (valid_mode, mode) in valid_modes.iter().zip(modes) {
-            if let Some(valid_mode2) = valid_mode {
-                if valid_mode2.mask_test(&mode) == false {
+        for (valid_list, mode) in valid_addr_lists.iter().zip(modes) {
+            if let Some(valid_list2) = valid_list {
+                if valid_list2.check_mode(&mode) == false {
                     todo!("invalid addressing mode");
                 }
             } else {

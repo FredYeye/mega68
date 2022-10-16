@@ -3,18 +3,19 @@ const SR_MASK:    u16 = 0b0010_000_000;
 const USP_MASK:   u16 = 0b0100_000_000;
 const MOVEM_MASK: u16 = 0b1000_000_000;
 
-const MODE_MASK: u16 = 0b111_000;
+const MODE_MASK:  u16 = 0b111_000;
 
-mod optype;
-mod opsize;
 mod addressing;
+mod opsize;
+mod optype;
 
-use addressing::AddressingMode;
+use std::collections::HashMap;
+
 use crate::Log;
+use addressing::AddressingMode;
 
-use self::optype::OpType;
 use self::opsize::OpSize;
-
+use self::optype::OpType;
 
 #[derive(Debug)]
 struct TokenizedString {
@@ -40,23 +41,19 @@ pub enum Value {
 }
 
 impl Value {
-    fn resolve_value(&self, labels: &std::collections::HashMap<String, u32>, defines: &std::collections::HashMap<String, u32>) -> Result<u32, Log> {
+    fn resolve_value(&self, labels: &HashMap<String, u32>, defines: &HashMap<String, u32>) -> Result<u32, Log> {
         match self {
             Value::Number(num) => Ok(*num),
-    
-            Value::Label(label) => {
-                match labels.get(label) {
-                    Some(val) => Ok(*val),
-                    None => return Err(Log::NoLabel),
-                }
-            }
 
-            Value::Define(name) => {
-                match defines.get(name) {
-                    Some(val) => Ok(*val),
-                    None => return Err(Log::NoDefine),
-                }
-            }
+            Value::Label(label) => match labels.get(label) {
+                Some(val) => Ok(*val),
+                None => return Err(Log::NoLabel),
+            },
+
+            Value::Define(name) => match defines.get(name) {
+                Some(val) => Ok(*val),
+                None => return Err(Log::NoDefine),
+            },
         }
     }
 }
@@ -66,9 +63,9 @@ pub struct Assembler {
     assembled: Vec<u16>,
     location: u32,
     line: u32,
-    labels: std::collections::HashMap<String, u32>,
+    labels: HashMap<String, u32>,
     last_label: String,
-    defines: std::collections::HashMap<String, u32>,
+    defines: HashMap<String, u32>,
 }
 
 impl Default for Assembler {
@@ -78,9 +75,9 @@ impl Default for Assembler {
             assembled: Vec::new(),
             location: 0,
             line: 0,
-            labels: std::collections::HashMap::new(),
+            labels: HashMap::new(),
             last_label: String::new(),
-            defines: std::collections::HashMap::new(),
+            defines: HashMap::new(),
         }
     }
 }
@@ -113,7 +110,7 @@ impl Assembler {
             let separated_op: Vec<&str> = trimmed_str.splitn(2, ' ').collect();
 
             if separated_op[0].is_empty() == true {
-                continue
+                continue;
             }
 
             match separated_op[0] {
@@ -134,26 +131,24 @@ impl Assembler {
                     }
 
                     let vec2: Vec<u16> = vec
-                    .chunks_exact(2)
-                    .into_iter()
-                    .map(|x| ((x[0] as u16) << 8) | x[1] as u16)
-                    .collect();
+                        .chunks_exact(2)
+                        .into_iter()
+                        .map(|x| ((x[0] as u16) << 8) | x[1] as u16)
+                        .collect();
 
                     let len = vec.len() as u32;
 
-                    self.tokens.push(
-                        Decoded {
-                            op_type: OpType::Data(vec2),
-                            op_size: OpSize::Unsized,
-                            operands: [AddressingMode::Empty, AddressingMode::Empty],
-                            line: self.line,
-                            location: self.location,
-                        }
-                    );
+                    self.tokens.push(Decoded {
+                        op_type: OpType::Data(vec2),
+                        op_size: OpSize::Unsized,
+                        operands: [AddressingMode::Empty, AddressingMode::Empty],
+                        line: self.line,
+                        location: self.location,
+                    });
 
                     self.location += len;
 
-                    continue
+                    continue;
                 }
 
                 "d16" => {
@@ -170,29 +165,33 @@ impl Assembler {
 
                     let len = vec.len() as u32 * 2;
 
-                    self.tokens.push(
-                        Decoded {
-                            op_type: OpType::Data(vec),
-                            op_size: OpSize::Unsized,
-                            operands: [AddressingMode::Empty, AddressingMode::Empty],
-                            line: self.line,
-                            location: self.location,
-                        }
-                    );
+                    self.tokens.push(Decoded {
+                        op_type: OpType::Data(vec),
+                        op_size: OpSize::Unsized,
+                        operands: [AddressingMode::Empty, AddressingMode::Empty],
+                        line: self.line,
+                        location: self.location,
+                    });
 
                     self.location += len;
 
-                    continue
+                    continue;
                 }
 
-                "d24" => { todo!() }
-                "d32" => { todo!() }
-                "d64" => { todo!() }
+                "d24" => {
+                    todo!()
+                }
+                "d32" => {
+                    todo!()
+                }
+                "d64" => {
+                    todo!()
+                }
                 _ => (),
             }
 
             if separated_op[0].ends_with(':') {
-                let label = &trimmed_str[0 .. trimmed_str.len() - 1];
+                let label = &trimmed_str[0..trimmed_str.len() - 1];
 
                 if separated_op[0].starts_with('.') {
                     let mut sub_label = self.last_label.clone();
@@ -204,7 +203,7 @@ impl Assembler {
                 }
 
                 //todo: keep parsing. right now, anything on the same line after the label is ignored
-                continue
+                continue;
             } else if separated_op[0].starts_with('!') {
                 let define_val = separated_op[1].trim_start();
 
@@ -213,7 +212,7 @@ impl Assembler {
                     self.defines.insert(separated_op[0][1..].to_string(), val);
                 }
 
-                continue
+                continue;
             }
 
             let (opcode, size) = if let Some((op, suffix)) = separated_op[0].split_once('.') {
@@ -227,43 +226,49 @@ impl Assembler {
             if separated_op.len() > 1 {
                 let commas: Vec<_> = separated_op[1].match_indices(",").collect();
 
-                if commas.is_empty() { //one operand
+                if commas.is_empty() {
+                    //one operand
                     operands[0] = Some(separated_op[1].trim_start().to_string());
-                } else { //one or two operands
-                    let parentheses = (
-                        separated_op[1].find('('),
-                        separated_op[1].find(')'),
-                    );
+                } else {
+                    //one or two operands
+                    let parentheses = (separated_op[1].find('('), separated_op[1].find(')'));
 
                     match parentheses {
-                        (None, None) => { //separator comma
+                        (None, None) => {
+                            //separator comma
                             let split_comma: Vec<&str> = separated_op[1].split(',').collect();
                             operands[0] = Some(split_comma[0].trim().to_string());
                             operands[1] = Some(split_comma[1].trim_start().to_string());
                         }
 
                         (Some(_), Some(_)) => {
-                            for x in 0 .. commas.len() {
+                            for x in 0..commas.len() {
                                 let parentheses_pos = (
                                     parentheses.0.unwrap() < commas[x].0,
                                     parentheses.1.unwrap() < commas[x].0,
                                 );
 
                                 match parentheses_pos {
-                                    (true, true) | (false, false) => { // (), | ,() separator comma
+                                    (true, true) | (false, false) => {
+                                        // (), | ,() separator comma
                                         let split_comma = separated_op[1].split_at(commas[x].0);
                                         operands[0] = Some(split_comma.0.trim().to_string());
-                                        operands[1] = Some(split_comma.1[1..].trim_start().to_string());
+                                        operands[1] =
+                                            Some(split_comma.1[1..].trim_start().to_string());
                                         break;
                                     }
 
-                                    (true, false) => { // (,) inside parentheses, go to next comma
-                                        if x == commas.len() - 1 { //last comma inside parentheses, one operand
-                                            operands[0] = Some(separated_op[1].trim_start().to_string());
+                                    (true, false) => {
+                                        // (,) inside parentheses, go to next comma
+                                        if x == commas.len() - 1 {
+                                            //last comma inside parentheses, one operand
+                                            operands[0] =
+                                                Some(separated_op[1].trim_start().to_string());
                                         }
                                     }
 
-                                    (false, true) => { // ),( error
+                                    (false, true) => {
+                                        // ),( error
                                         todo!("mismatched parentheses");
                                     }
                                 }
@@ -277,7 +282,11 @@ impl Assembler {
                 }
             }
 
-            let string_token = TokenizedString{opcode, size, operands};
+            let string_token = TokenizedString {
+                opcode,
+                size,
+                operands,
+            };
 
             match self.string_token_to_token(&string_token, self.line, self.location) {
                 Ok(token) => {
@@ -320,17 +329,23 @@ impl Assembler {
 
             if let AddressingMode::AddressRegister(_) = mode {
                 if size == OpSize::B {
-                    return Err(Log::AnB)
+                    return Err(Log::AnB);
                 }
             }
         }
 
-        Ok(Decoded { op_type: opcode, op_size: size, operands: modes, line: line, location: location })
+        Ok(Decoded {
+            op_type: opcode,
+            op_size: size,
+            operands: modes,
+            line: line,
+            location: location,
+        })
     }
 
     fn assemble(&self, op: &Decoded) -> Result<Vec<u16>, Log> {
-        use OpType::*;
         use OpSize::*;
+        use OpType::*;
 
         op.op_type.valid_size(op.op_size)?;
 
@@ -339,14 +354,14 @@ impl Assembler {
         let (ea_a1, ea_a2) = op.operands[0].effective_addressing(&self.labels, &self.defines)?;
         let (ea_b1, ea_b2) = op.operands[1].effective_addressing(&self.labels, &self.defines)?;
 
-        Ok( match &op.op_type {
+        Ok(match &op.op_type {
             Branch(_) => {
                 let offset = (ea_a2[0] as i16 - (op.location as i16 + 2)) as u16;
 
                 match op.op_size {
                     B => vec![op.op_type.format() | (offset & 0xFF)],
                     W => vec![op.op_type.format(), offset],
-                    _ => unreachable!(), 
+                    _ => unreachable!(),
                 }
             }
 
@@ -381,18 +396,20 @@ impl Assembler {
 
             AddSub(_) | OrAnd(_) => {
                 let (reg, dir, ea) = match ea_b1 & MODE_MASK == 0b000_000 {
-                    true  => (ea_b1 & 0b111, 0, (ea_a1, ea_a2)),
+                    true => (ea_b1 & 0b111, 0, (ea_a1, ea_a2)),
                     false => (ea_a1 & 0b111, 1 << 8, (ea_b1, ea_b2)),
                 };
 
-                let mut format = vec![op.op_type.format() | (reg << 9) | dir | op.op_size.size1() | ea.0];
+                let mut format =
+                    vec![op.op_type.format() | (reg << 9) | dir | op.op_size.size1() | ea.0];
                 format.extend(ea.1);
                 format
             }
 
             Eor => {
                 let reg = ea_a1 & 0b111;
-                let mut format = vec![op.op_type.format() | (reg << 9) | op.op_size.size1() | ea_b1];
+                let mut format =
+                    vec![op.op_type.format() | (reg << 9) | op.op_size.size1() | ea_b1];
                 format.extend(ea_b2);
                 format
             }
@@ -412,9 +429,8 @@ impl Assembler {
             }
 
             AddSubX(_) | BCD(_) => {
-
                 let rm = match ea_a1 & MODE_MASK == 0b000_000 {
-                    true  => 0,
+                    true => 0,
                     false => 1 << 3,
                 };
 
@@ -427,7 +443,7 @@ impl Assembler {
             AddSubQ(_) => {
                 let imm = ea_a2[0];
 
-                if (1 ..= 8).contains(&imm) == false {
+                if (1..=8).contains(&imm) == false {
                     todo!("addq/subq immediate out of range")
                 }
 
@@ -435,7 +451,8 @@ impl Assembler {
                     println!("info: addq.w/subq.w will operate on the entire address register");
                 }
 
-                let mut format = vec![op.op_type.format() | ((imm & 0b111) << 9) | op.op_size.size1() | ea_b1];
+                let mut format =
+                    vec![op.op_type.format() | ((imm & 0b111) << 9) | op.op_size.size1() | ea_b1];
                 format.extend(ea_b2);
                 format
             }
@@ -498,8 +515,10 @@ impl Assembler {
                             }
 
                             _ => { //normal move
-                                let ea_dst_reorder = ((ea_b1 & 0b000_111) << 9) | ((ea_b1 & 0b111_000) << 3);
-                                let mut format = vec![op.op_size.size_move() | ea_dst_reorder | ea_a1];
+                                let ea_dst_reorder =
+                                    ((ea_b1 & 0b000_111) << 9) | ((ea_b1 & 0b111_000) << 3);
+                                let mut format =
+                                    vec![op.op_size.size_move() | ea_dst_reorder | ea_a1];
                                 format.extend(ea_a2);
                                 format.extend(ea_b2);
                                 format
@@ -518,7 +537,7 @@ impl Assembler {
 
             BitManip(_) => {
                 let op1 = match ea_a1 & MODE_MASK == 0b000_000 {
-                    true  => (((ea_a1 & 0b111) << 9) | (1 << 8), vec![]),
+                    true => (((ea_a1 & 0b111) << 9) | (1 << 8), vec![]),
                     false => ((1 << 11), vec![(ea_a2[0] & 0xFF) as u16]),
                 };
 
@@ -554,7 +573,7 @@ impl Assembler {
                 let mode = match ea_b1 & MODE_MASK == 0b000_000 {
                     true => {
                         let (count_reg, ir) = match ea_a1 & MODE_MASK == 0b000_000 {
-                            true  => (ea_a1 & 0b111, false),
+                            true => (ea_a1 & 0b111, false),
                             false => (ea_a2[0] & 0b111, true),
                         };
 
@@ -588,11 +607,11 @@ impl Assembler {
 
             Exg => {
                 let (mode, ry) = match ea_b1 & MODE_MASK == 0b000_000 {
-                    true  => (0b01000 << 3, (ea_b1 & 0b111)),
+                    true => (0b01000 << 3, (ea_b1 & 0b111)),
 
                     false => {
                         let op_mode = match ea_a1 & MODE_MASK == 0b000_000 {
-                            true  => 0b10001 << 3,
+                            true => 0b10001 << 3,
                             false => 0b01001 << 3,
                         };
 
@@ -662,11 +681,12 @@ impl Assembler {
 
             Movep => {
                 let (reg, dir, ea) = match ea_a1 & MODE_MASK == 0b000_000 {
-                    true  => ((ea_a1 & 0b111) << 9, 1 << 7, (ea_b1, ea_b2)),
-                    false => ((ea_b1 & 0b111) << 9, 0     , (ea_a1, ea_a2)),
+                    true => ((ea_a1 & 0b111) << 9, 1 << 7, (ea_b1, ea_b2)),
+                    false => ((ea_b1 & 0b111) << 9, 0, (ea_a1, ea_a2)),
                 };
 
-                let mut format = vec![op.op_type.format() | reg | dir | op.op_size.size2() | (ea.0 & 0b111)];
+                let mut format =
+                    vec![op.op_type.format() | reg | dir | op.op_size.size2() | (ea.0 & 0b111)];
                 format.extend(ea.1);
                 format
             }
@@ -699,14 +719,14 @@ fn parse_n(token: &str) -> Result<u32, Log> {
     let (radix, offset_begin) = if token.len() > 2 {
         match &token[0..2] {
             "0x" => (16, 2),
-            "0b" =>  (2, 2),
-            _    => (10, 0),
+            "0b" => (2, 2),
+            _ => (10, 0),
         }
     } else {
         (10, 0)
     };
 
-    match i64::from_str_radix(&token[offset_begin .. token.len()], radix) {
+    match i64::from_str_radix(&token[offset_begin..token.len()], radix) {
         Ok(val) => Ok(val as u32),
         Err(_) => Err(Log::InvalidNumber),
     }
