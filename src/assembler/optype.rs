@@ -339,6 +339,7 @@ impl OpType {
         let valid_modes = match self {
             OpType::Branch(_) => [Some(Displacement), None],
             OpType::NoOperands(_) => [None, None],
+
             OpType::Immediates(imm) => {
                 let valid_ccr_sr_modes = [0b000, 0b001, 0b101];
 
@@ -475,11 +476,10 @@ impl OpType {
 
         for (valid_mode, mode) in valid_modes.iter().zip(modes) {
             if let Some(valid_mode2) = valid_mode {
-                if valid_mode2.contains(&mode) == false {
+                if valid_mode2.mask_test(&mode) == false {
                     todo!("invalid addressing mode");
                 }
-            }
-            else {
+            } else {
                 if *mode != AddressingMode::Empty {
                     todo!("invalid addressing mode (too many operands)");
                 }

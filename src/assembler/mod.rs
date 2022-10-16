@@ -336,8 +336,8 @@ impl Assembler {
 
         op.op_type.is_valid_modes(&op.operands);
 
-        let (ea_a1, ea_a2) = addressing::effective_addressing(&op.operands[0], &self.labels, &self.defines)?;
-        let (ea_b1, ea_b2) = addressing::effective_addressing(&op.operands[1], &self.labels, &self.defines)?;
+        let (ea_a1, ea_a2) = op.operands[0].effective_addressing(&self.labels, &self.defines)?;
+        let (ea_b1, ea_b2) = op.operands[1].effective_addressing(&self.labels, &self.defines)?;
 
         Ok( match &op.op_type {
             Branch(_) => {
