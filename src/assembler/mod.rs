@@ -418,7 +418,7 @@ impl Assembler {
                 format
             }
 
-            AddSubX(_) | BCD(_) => {
+            AddSubX(_) | Bcd(_) => {
                 let rm = match ea_a1 & MODE_MASK == 0b000_000 {
                     true => 0,
                     false => 1 << 3,
