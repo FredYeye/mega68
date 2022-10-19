@@ -275,9 +275,7 @@ impl OpType {
         use OpType::*;
 
         let valid = match self {
-            Bcd(_) | Nbcd | Scc(_) | Tas => B,
-            Chk | Dbcc(_) | Link | MulDiv(_) => W,
-            Exg | Lea | Pea => L,
+            Chk | Link | MulDiv(_) => W,
 
             Branch(_) => BW,
             BitManip(_) => BL,
@@ -288,8 +286,9 @@ impl OpType {
 
             Jump(_) | NoOperands(_) | Stop | Trap | Unlk => Unsized,
 
-            Swap => WU,
-            MoveQ => LU,
+            Bcd(_) | Nbcd | Scc(_) | Tas => BU,
+            Dbcc(_) | Swap => WU,
+            Exg | Lea | MoveQ | Pea => LU,
 
             Data(_) => Unsized, //unused
         };
@@ -300,11 +299,11 @@ impl OpType {
         }
     }
 
-    pub fn is_valid_modes(&self, modes: &[AddressingMode; 2]) {
+    fn mode_lists(&self, modes: &[AddressingMode; 2]) -> [Option<AddressingList>; 2] {
         use AddressingList::*;
         use OpType::*;
 
-        let valid_addr_lists = match self {
+        match self {
             Branch(_)                                 => [Some(Displacement), None],
             NoOperands(_)                             => [None, None],
             AddSubA(_) | OpType::MoveA | OpType::Cmpa => [Some(All), Some(AddressRegister)],
@@ -385,12 +384,12 @@ impl OpType {
                 let valid_ccr_sr_modes = [0b000, 0b001, 0b101];
 
                 match modes[1] {
-                    AddressingMode::CCR =>  match valid_ccr_sr_modes.contains(imm) {
+                    AddressingMode::CCR => match valid_ccr_sr_modes.contains(imm) {
                         true  => [Some(Immediate), Some(CCR)],
                         false => todo!("error"),
                     }
 
-                    AddressingMode::SR =>  match valid_ccr_sr_modes.contains(imm) {
+                    AddressingMode::SR => match valid_ccr_sr_modes.contains(imm) {
                         true  => [Some(Immediate), Some(SR)],
                         false => todo!("error"),
                     }
@@ -400,11 +399,13 @@ impl OpType {
             }
 
             Data(_) => [None, None], //unused
-        };
+        }
+    }
 
-        for (valid_list, mode) in valid_addr_lists.iter().zip(modes) {
+    pub fn is_valid_modes(&self, modes: &[AddressingMode; 2]) {
+        for (valid_list, mode) in self.mode_lists(modes).iter().zip(modes) {
             if let Some(valid_list2) = valid_list {
-                if !valid_list2.check_mode(mode) {
+                if !valid_list2.contains(mode) {
                     todo!("invalid addressing mode");
                 }
             } else if *mode != AddressingMode::Empty {

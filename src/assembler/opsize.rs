@@ -7,8 +7,7 @@ pub enum OpSize {
     BWL,
 
     Unsized,
-    WU,
-    LU,
+    BU, WU, LU,
 }
 
 impl OpSize {
@@ -25,6 +24,7 @@ impl OpSize {
             OpSize::BWL => 0b111,
 
             OpSize::Unsized => 0b1000,
+            OpSize::BU => 0b1001,
             OpSize::WU => 0b1010,
             OpSize::LU => 0b1100,
         }

@@ -178,7 +178,7 @@ pub enum AddressingList {
 }
 
 impl AddressingList {
-    pub fn check_mode(&self, mode: &AddressingMode) -> bool {
+    pub fn contains(&self, mode: &AddressingMode) -> bool {
         let list_mask = match self {
             Self::All                   => 0b0_000_000_111111111111,
             Self::Alterable             => 0b0_000_000_011111111111,
@@ -248,10 +248,7 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
             let commas: Vec<_> = token.match_indices(',').collect();
 
             if !commas.is_empty() {
-                if token[commas[0].0..token.len()]
-                    .to_uppercase()
-                    .contains("PC")
-                {
+                if token[commas[0].0..token.len()].to_uppercase().contains("PC") {
                     match commas.len() {
                         1 => {
                             let disp = match parse_n(token[1..commas[0].0].trim()) {
@@ -447,12 +444,9 @@ fn movem(token: &str) -> Result<Option<u16>, Log> {
 
 fn parse_reg(token: &str) -> Result<u8, Log> {
     match token.parse::<u32>() {
-        Ok(reg) => {
-            if reg > 7 {
-                todo!("register out of range");
-            }
-
-            Ok(reg as u8)
+        Ok(reg) => match reg < 8 {
+            true  => Ok(reg as u8),
+            false => todo!("register out of range"),
         }
 
         Err(_) => Err(Log::InvalidRegister),

@@ -390,16 +390,14 @@ impl Assembler {
                     false => (ea_a1 & 0b111, 1 << 8, (ea_b1, ea_b2)),
                 };
 
-                let mut format =
-                    vec![op.op_type.format() | (reg << 9) | dir | op.op_size.size1() | ea.0];
+                let mut format = vec![op.op_type.format() | (reg << 9) | dir | op.op_size.size1() | ea.0];
                 format.extend(ea.1);
                 format
             }
 
             Eor => {
                 let reg = ea_a1 & 0b111;
-                let mut format =
-                    vec![op.op_type.format() | (reg << 9) | op.op_size.size1() | ea_b1];
+                let mut format = vec![op.op_type.format() | (reg << 9) | op.op_size.size1() | ea_b1];
                 format.extend(ea_b2);
                 format
             }
@@ -441,8 +439,7 @@ impl Assembler {
                     println!("info: addq.w/subq.w will operate on the entire address register");
                 }
 
-                let mut format =
-                    vec![op.op_type.format() | ((imm & 0b111) << 9) | op.op_size.size1() | ea_b1];
+                let mut format = vec![op.op_type.format() | ((imm & 0b111) << 9) | op.op_size.size1() | ea_b1];
                 format.extend(ea_b2);
                 format
             }
@@ -465,12 +462,9 @@ impl Assembler {
                         }
                     }
 
-                    USP_MASK => {
-                        if op.op_size == L {
-                            vec![(0b0100_11100110) | ea_b1]
-                        } else {
-                            todo!("error")
-                        }
+                    USP_MASK => match op.op_size == L {
+                        true  => vec![(0b0100_11100110) | ea_b1],
+                        false => todo!("error"),
                     }
 
                     _ => {
@@ -505,10 +499,8 @@ impl Assembler {
                             }
 
                             _ => { //normal move
-                                let ea_dst_reorder =
-                                    ((ea_b1 & 0b000_111) << 9) | ((ea_b1 & 0b111_000) << 3);
-                                let mut format =
-                                    vec![op.op_size.size_move() | ea_dst_reorder | ea_a1];
+                                let ea_dst_reorder = ((ea_b1 & 0b000_111) << 9) | ((ea_b1 & 0b111_000) << 3);
+                                let mut format = vec![op.op_size.size_move() | ea_dst_reorder | ea_a1];
                                 format.extend(ea_a2);
                                 format.extend(ea_b2);
                                 format
@@ -681,10 +673,9 @@ impl Assembler {
 
             Movem => {
                 let (dr, mask, ea) = if ea_a1 == MOVEM_MASK {
-                    let mask = if ea_b1 & 0b111_000 == 0b100_000 {
-                        ea_a2[0].reverse_bits()
-                    } else {
-                        ea_a2[0]
+                    let mask = match ea_b1 & MODE_MASK == 0b100_000 {
+                        true  => ea_a2[0].reverse_bits(),
+                        false => ea_a2[0],
                     };
 
                     (0 << 10, mask, (ea_b1, ea_b2))
