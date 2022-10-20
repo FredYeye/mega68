@@ -1,6 +1,6 @@
 #![allow(clippy::unusual_byte_groupings)]
 
-use crate::Log;
+use crate::logging::Log;
 
 use super::{addressing::AddressingList, addressing::AddressingMode, OpSize};
 

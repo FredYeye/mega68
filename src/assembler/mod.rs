@@ -14,7 +14,7 @@ mod optype;
 
 use std::collections::HashMap;
 
-use crate::Log;
+use crate::logging::Log;
 use addressing::AddressingMode;
 
 use self::opsize::OpSize;
@@ -57,6 +57,24 @@ impl Value {
                 Some(val) => Ok(*val),
                 None => Err(Log::NoDefine),
             },
+        }
+    }
+
+    fn new(token: &str, last_label: &str) -> Value {
+        match parse_n(token) {
+            Ok(number) => Value::Number(number),
+    
+            Err(_) => {
+                if let Some(define) = token.strip_prefix('!') {
+                    Value::Define(define.to_string())
+                } else if token.starts_with('.') {
+                    let mut sub_label = last_label.to_string();
+                    sub_label.push_str(token);
+                    Value::Label(sub_label)
+                } else {
+                    Value::Label(token.to_string())
+                }
+            }
         }
     }
 }
