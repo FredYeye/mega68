@@ -1,3 +1,7 @@
+// struct Logging {
+//     warn: Vec<(u32, LogWarn)>,
+// }
+
 pub enum Log {
     InvalidOp,
     InvalidSuffix,
@@ -8,6 +12,8 @@ pub enum Log {
     NoLabel,
     NoDefine,
     InvalidRegister,
+    InvalidAddressingMode,
+    TooManyOperands,
 }
 
 impl Log {
@@ -22,6 +28,8 @@ impl Log {
             Self::NoLabel => "Label doesn't exist",
             Self::NoDefine => "Define doesn't exist",
             Self::InvalidRegister => "Invalid register specified",
+            Self::InvalidAddressingMode => "Invalid addressing mode",
+            Self::TooManyOperands => "Expected one operand, found two",
         }
     }
 }

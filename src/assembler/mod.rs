@@ -346,7 +346,7 @@ impl Assembler {
 
         op.op_type.valid_size(op.op_size)?;
 
-        op.op_type.is_valid_modes(&op.operands);
+        op.op_type.is_valid_modes(&op.operands)?;
 
         let (ea_a1, ea_a2) = op.operands[0].effective_addressing(&self.labels, &self.defines)?;
         let (ea_b1, ea_b2) = op.operands[1].effective_addressing(&self.labels, &self.defines)?;

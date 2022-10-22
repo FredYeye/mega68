@@ -381,20 +381,16 @@ impl OpType {
             }
 
             Immediates(imm) => {
-                let valid_ccr_sr_modes = [0b000, 0b001, 0b101];
+                let valid_ccr_sr_modes = [0b000, 0b001, 0b101]; //ori, andi, eori
 
-                match modes[1] {
-                    AddressingMode::CCR => match valid_ccr_sr_modes.contains(imm) {
-                        true  => [Some(Immediate), Some(CCR)],
-                        false => todo!("error"),
+                if valid_ccr_sr_modes.contains(imm) {
+                    match modes[1] {
+                        AddressingMode::CCR => [Some(Immediate), Some(CCR)],
+                        AddressingMode::SR => [Some(Immediate), Some(SR)],
+                        _ => [Some(Immediate), Some(DataAlterable)],
                     }
-
-                    AddressingMode::SR => match valid_ccr_sr_modes.contains(imm) {
-                        true  => [Some(Immediate), Some(SR)],
-                        false => todo!("error"),
-                    }
-
-                    _ => [Some(Immediate), Some(DataAlterable)],
+                } else {
+                    [Some(Immediate), Some(DataAlterable)]
                 }
             }
 
@@ -402,15 +398,17 @@ impl OpType {
         }
     }
 
-    pub fn is_valid_modes(&self, modes: &[AddressingMode; 2]) {
+    pub fn is_valid_modes(&self, modes: &[AddressingMode; 2]) -> Result<(), Log> {
         for (valid_list, mode) in self.mode_lists(modes).iter().zip(modes) {
-            if let Some(valid_list2) = valid_list {
-                if !valid_list2.contains(mode) {
-                    todo!("invalid addressing mode");
+            if let Some(valid_list) = valid_list {
+                if !valid_list.contains(mode) {
+                    return Err(Log::InvalidAddressingMode);
                 }
             } else if *mode != AddressingMode::Empty {
-                todo!("invalid addressing mode (too many operands)");
+                return Err(Log::TooManyOperands);
             }
         }
+
+        Ok(())
     }
 }
