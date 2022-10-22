@@ -1,8 +1,8 @@
 ### general
 - [x] don't require suffix if only one suffix is possible
 - [ ] don't require suffix on bcc? (try .b, fall back on .w)
-- [ ] no-align (name?) directive that disables auto alignment after byte define
-- [ ] data defines
+- [ ] "no align" directive that disables auto alignment after byte define? (limited use cases)
+- [x] data defines
 - [ ] macros
 - [x] fix: labels cannot start with an A or a D
 - [ ] write tests for all opcodes and addressing modes

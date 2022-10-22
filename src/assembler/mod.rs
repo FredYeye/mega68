@@ -62,7 +62,7 @@ impl Value {
 
     fn new(token: &str, last_label: &str) -> Value {
         match parse_n(token) {
-            Ok(number) => Value::Number(number),
+            Ok(number) => Value::Number(number as u32),
     
             Err(_) => {
                 if let Some(define) = token.strip_prefix('!') {
@@ -75,6 +75,27 @@ impl Value {
                     Value::Label(token.to_string())
                 }
             }
+        }
+    }
+}
+
+enum DataType {
+    Data08,
+    Data16,
+    Data24,
+    Data32,
+    Data64,
+}
+
+impl DataType {
+    fn is_data(token: &str) -> Option<Self> {
+        match token {
+            "d08" => Some(Self::Data08),
+            "d16" => Some(Self::Data16),
+            "d24" => Some(Self::Data24),
+            "d32" => Some(Self::Data32),
+            "d64" => Some(Self::Data64),
+            _ => None,
         }
     }
 }
@@ -121,81 +142,9 @@ impl Assembler {
                 continue;
             }
 
-            match separated_op[0] {
-                "d08" | "d8" => {
-                    let mut vec = Vec::new();
-                    for data in separated_op[1].split(',') {
-                        // check for labels here
-                        let val = match parse_n(data.trim()) {
-                            Ok(val2) => val2 as u8,
-                            Err(e) => return Err(e),
-                        };
-
-                        vec.push(val);
-                    }
-
-                    if vec.len() & 1 != 0 {
-                        vec.push(0);
-                    }
-
-                    let vec2: Vec<u16> = vec
-                        .chunks_exact(2)
-                        .into_iter()
-                        .map(|x| ((x[0] as u16) << 8) | x[1] as u16)
-                        .collect();
-
-                    let len = vec.len() as u32;
-
-                    self.tokens.push(Decoded {
-                        op_type: OpType::Data(vec2),
-                        op_size: OpSize::Unsized,
-                        operands: [AddressingMode::Empty, AddressingMode::Empty],
-                        line: self.line,
-                        location: self.location,
-                    });
-
-                    self.location += len;
-
-                    continue;
-                }
-
-                "d16" => {
-                    let mut vec = Vec::new();
-                    for data in separated_op[1].split(',') {
-                        // check for labels here
-                        let val = match parse_n(data.trim()) {
-                            Ok(val2) => (val2 as u16).to_be(),
-                            Err(e) => return Err(e),
-                        };
-
-                        vec.push(val);
-                    }
-
-                    let len = vec.len() as u32 * 2;
-
-                    self.tokens.push(Decoded {
-                        op_type: OpType::Data(vec),
-                        op_size: OpSize::Unsized,
-                        operands: [AddressingMode::Empty, AddressingMode::Empty],
-                        line: self.line,
-                        location: self.location,
-                    });
-
-                    self.location += len;
-
-                    continue;
-                }
-
-                "d24" => {
-                    todo!()
-                }
-                "d32" => {
-                    todo!()
-                }
-                "d64" => {
-                    todo!()
-                }
-                _ => (),
+            if let Some(data_type) = DataType::is_data(separated_op[0]) {
+                self.data_define(separated_op[1], data_type)?;
+                continue;
             }
 
             if separated_op[0].ends_with(':') {
@@ -217,7 +166,7 @@ impl Assembler {
 
                 if let Some(define) = define_val.strip_prefix('=') {
                     let val = parse_n(define.trim_start())?;
-                    self.defines.insert(separated_op[0][1..].to_string(), val);
+                    self.defines.insert(separated_op[0][1..].to_string(), val as u32);
                 }
 
                 continue;
@@ -349,6 +298,46 @@ impl Assembler {
             line: line,
             location: location,
         })
+    }
+
+    fn data_define(&mut self, list: &str, size: DataType) -> Result<(), Log> {
+        let mut vec = Vec::new();
+
+        for data in list.split(',').map(|x| x.trim()) {
+            // check for labels here
+            let val = parse_n(data)?;
+
+            vec.extend(match size {
+                DataType::Data08 => val.to_be_bytes()[7..=7].to_vec(),
+                DataType::Data16 => val.to_be_bytes()[6..=7].to_vec(),
+                DataType::Data24 => val.to_be_bytes()[5..=7].to_vec(),
+                DataType::Data32 => val.to_be_bytes()[4..=7].to_vec(),
+                DataType::Data64 => val.to_be_bytes().to_vec(),
+            });
+        }
+
+        if vec.len() & 1 != 0 {
+            //probably print a warning here
+            vec.push(0);
+        }
+
+        let vec2: Vec<u16> = vec
+            .chunks_exact(2)
+            .into_iter()
+            .map(|x| u16::from_be_bytes([x[0], x[1]]))
+            .collect();
+
+        self.tokens.push(Decoded {
+            op_type: OpType::Data(vec2),
+            op_size: OpSize::Unsized,
+            operands: [AddressingMode::Empty, AddressingMode::Empty],
+            line: self.line,
+            location: self.location,
+        });
+
+        self.location += vec.len() as u32;
+
+        Ok(())
     }
 
     fn assemble(&self, op: &Decoded) -> Result<Vec<u16>, Log> {
@@ -712,7 +701,7 @@ impl Assembler {
     }
 }
 
-fn parse_n(token: &str) -> Result<u32, Log> {
+fn parse_n(token: &str) -> Result<u64, Log> {
     let (radix, offset_begin) = if token.len() > 2 {
         match &token[0..2] {
             "0x" => (16, 2),
@@ -724,7 +713,11 @@ fn parse_n(token: &str) -> Result<u32, Log> {
     };
 
     match i64::from_str_radix(&token[offset_begin..token.len()], radix) {
-        Ok(val) => Ok(val as u32),
-        Err(_) => Err(Log::InvalidNumber),
+        Ok(val) => Ok(val as u64),
+
+        Err(_) => match u64::from_str_radix(&token[offset_begin..token.len()], radix) {
+            Ok(val) => Ok(val),
+            Err(_) => Err(Log::InvalidNumber),
+        }
     }
 }

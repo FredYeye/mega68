@@ -344,7 +344,7 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
         }
     } else if token.to_lowercase().ends_with(".l") {
         match parse_n(&token[..token.len() - 2]) {
-            Ok(val) => Ok(AbsoluteLong(Value::Number(val))),
+            Ok(val) => Ok(AbsoluteLong(Value::Number(val as u32))),
             Err(e) => return Err(e),
         }
     } else {
