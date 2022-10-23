@@ -14,6 +14,7 @@ pub enum Log {
     InvalidRegister,
     InvalidAddressingMode,
     TooManyOperands,
+    LabelRedefinition,
 }
 
 impl Log {
@@ -30,6 +31,7 @@ impl Log {
             Self::InvalidRegister => "Invalid register specified",
             Self::InvalidAddressingMode => "Invalid addressing mode",
             Self::TooManyOperands => "Expected one operand, found two",
+            Self::LabelRedefinition => "Label redefinition",
         }
     }
 }

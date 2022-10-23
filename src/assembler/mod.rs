@@ -150,13 +150,21 @@ impl Assembler {
             if separated_op[0].ends_with(':') {
                 let label = &trimmed_str[0..trimmed_str.len() - 1];
 
-                if separated_op[0].starts_with('.') {
-                    let mut sub_label = self.last_label.clone();
-                    sub_label.push_str(label);
-                    self.labels.insert(sub_label, self.location);
+                if separated_op[0].starts_with('.') { // sub label
+                    let sub_label = format!("{}{}", self.last_label, label);
+                    
+                    if !self.labels.contains_key(&sub_label) {
+                        self.labels.insert(sub_label, self.location);
+                    } else {
+                        return Err(Log::LabelRedefinition);
+                    }
                 } else {
-                    self.last_label = label.to_string();
-                    self.labels.insert(label.to_string(), self.location);
+                    if !self.labels.contains_key(label) {
+                        self.last_label = label.to_string();
+                        self.labels.insert(label.to_string(), self.location);
+                    } else {
+                        return Err(Log::LabelRedefinition);
+                    }
                 }
 
                 //todo: keep parsing. right now, anything on the same line after the label is ignored
@@ -183,58 +191,45 @@ impl Assembler {
             if separated_op.len() > 1 {
                 let commas: Vec<_> = separated_op[1].match_indices(',').collect();
 
-                if commas.is_empty() {
-                    //one operand
+                if commas.is_empty() { //one operand
                     operands[0] = Some(separated_op[1].trim_start().to_string());
-                } else {
-                    //one or two operands
+                } else { //one or two operands
                     let parentheses = (separated_op[1].find('('), separated_op[1].find(')'));
 
                     match parentheses {
-                        (None, None) => {
-                            //separator comma
+                        (None, None) => { //separator comma
                             let split_comma: Vec<&str> = separated_op[1].split(',').collect();
                             operands[0] = Some(split_comma[0].trim().to_string());
                             operands[1] = Some(split_comma[1].trim_start().to_string());
                         }
 
-                        (Some(_), Some(_)) => {
+                        (Some(paren0), Some(paren1)) => {
                             for x in 0..commas.len() {
                                 let parentheses_pos = (
-                                    parentheses.0.unwrap() < commas[x].0,
-                                    parentheses.1.unwrap() < commas[x].0,
+                                    paren0 < commas[x].0,
+                                    paren1 < commas[x].0,
                                 );
 
                                 match parentheses_pos {
-                                    (true, true) | (false, false) => {
-                                        // (), | ,() separator comma
+                                    (true, true) | (false, false) => { // (), | ,() separator comma
                                         let split_comma = separated_op[1].split_at(commas[x].0);
                                         operands[0] = Some(split_comma.0.trim().to_string());
-                                        operands[1] =
-                                            Some(split_comma.1[1..].trim_start().to_string());
+                                        operands[1] = Some(split_comma.1[1..].trim_start().to_string());
                                         break;
                                     }
 
-                                    (true, false) => {
-                                        // (,) inside parentheses, go to next comma
-                                        if x == commas.len() - 1 {
-                                            //last comma inside parentheses, one operand
-                                            operands[0] =
-                                                Some(separated_op[1].trim_start().to_string());
+                                    (true, false) => { // (,) inside parentheses, go to next comma
+                                        if x == commas.len() - 1 { //last comma inside parentheses, one operand
+                                            operands[0] = Some(separated_op[1].trim_start().to_string());
                                         }
                                     }
 
-                                    (false, true) => {
-                                        // ),( error
-                                        todo!("mismatched parentheses");
-                                    }
+                                    (false, true) => todo!("mismatched parentheses"), // ),( error
                                 }
                             }
                         }
 
-                        (Some(_), None) | (None, Some(_)) => {
-                            todo!("mismatched parentheses");
-                        }
+                        (Some(_), None) | (None, Some(_)) => todo!("mismatched parentheses"),
                     }
                 }
             }
