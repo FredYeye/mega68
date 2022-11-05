@@ -101,6 +101,12 @@ impl DataType {
 }
 
 #[derive(Default)]
+enum CpuType {
+    #[default] MC68000,
+    MC68010,
+}
+
+#[derive(Default)]
 pub struct Assembler {
     tokens: Vec<Decoded>,
     assembled: Vec<u16>,
@@ -109,13 +115,13 @@ pub struct Assembler {
     labels: HashMap<String, u32>,
     last_label: String,
     defines: HashMap<String, u32>,
+    cpu_type: CpuType,
 }
 
 impl Assembler {
     pub fn run(&mut self, text: &str) -> Result<&Vec<u16>, (Log, u32)> {
-        match self.tokenize_string(text) {
-            Ok(_) => (),
-            Err(e) => return Err((e, self.line)),
+        if let Err(e) = self.tokenize_string(text) {
+            return Err((e, self.line));
         }
 
         for token in &self.tokens {
@@ -147,34 +153,17 @@ impl Assembler {
                 continue;
             }
 
-            if separated_op[0].ends_with(':') {
-                let label = &trimmed_str[0..trimmed_str.len() - 1];
-
-                if separated_op[0].starts_with('.') { // sub label
-                    let sub_label = format!("{}{}", self.last_label, label);
-                    
-                    if !self.labels.contains_key(&sub_label) {
-                        self.labels.insert(sub_label, self.location);
-                    } else {
-                        return Err(Log::LabelRedefinition);
-                    }
-                } else {
-                    if !self.labels.contains_key(label) {
-                        self.last_label = label.to_string();
-                        self.labels.insert(label.to_string(), self.location);
-                    } else {
-                        return Err(Log::LabelRedefinition);
-                    }
-                }
-
-                //todo: keep parsing. right now, anything on the same line after the label is ignored
+            if let Some(label) = separated_op[0].strip_suffix(':') {
+                self.label_define(label)?;
                 continue;
-            } else if separated_op[0].starts_with('!') {
+            }
+
+            if let Some(define_name) = separated_op[0].strip_prefix('!') {
                 let define_val = separated_op[1].trim_start();
 
-                if let Some(define) = define_val.strip_prefix('=') {
-                    let val = parse_n(define.trim_start())?;
-                    self.defines.insert(separated_op[0][1..].to_string(), val as u32);
+                if let Some(define_val) = define_val.strip_prefix('=') {
+                    let val = parse_n(define_val.trim_start())?;
+                    self.defines.insert(define_name.to_string(), val as u32);
                 }
 
                 continue;
@@ -293,6 +282,27 @@ impl Assembler {
             line: line,
             location: location,
         })
+    }
+
+    fn label_define(&mut self, label: &str) -> Result<(), Log> {
+        if label.starts_with('.') { // sub label
+            let sub_label = format!("{}{}", self.last_label, label);
+            
+            if !self.labels.contains_key(&sub_label) {
+                self.labels.insert(sub_label, self.location);
+            } else {
+                return Err(Log::LabelRedefinition);
+            }
+        } else {
+            if !self.labels.contains_key(label) {
+                self.last_label = label.to_string();
+                self.labels.insert(label.to_string(), self.location);
+            } else {
+                return Err(Log::LabelRedefinition);
+            }
+        }
+
+        Ok(())
     }
 
     fn data_define(&mut self, list: &str, size: DataType) -> Result<(), Log> {
@@ -540,6 +550,15 @@ impl Assembler {
             }
 
             Misc1(_) | Tst => {
+                match (&op.op_type, &self.cpu_type) {
+                    (Tst, CpuType::MC68000 | CpuType::MC68010) => {
+                        if ea_a1 & MODE_MASK == ADDRESS_REGISTER_MASK || ea_a1 == 0b111_100 || ea_a1 == 0b111_010 || ea_a1 == 0b111_011 {
+                            return Err(Log::CpuTypeModeNotValid);
+                        }
+                    }
+
+                    _ => (),
+                }
                 let mut format = vec![op.op_type.format() | op.op_size.size1() | ea_a1];
                 format.extend(ea_a2);
                 format

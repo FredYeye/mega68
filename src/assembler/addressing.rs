@@ -215,22 +215,18 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
     use AddressingMode::*;
 
     if token.len() == 2 {
-        match parse_reg(&token[1..=1]) {
-            Ok(reg) => {
-                if token.to_uppercase().starts_with('D') {
-                    return Ok( match opcode {
-                        OpType::Movem => RegisterList(1 << reg),
-                        _ => DataRegister(reg),
-                    })
-                } else if token.to_uppercase().starts_with('A') {
-                    return Ok( match opcode {
-                        OpType::Movem => RegisterList(1 << (reg + 8)),
-                        _ => AddressRegister(reg),
-                    })
-                }
+        if let Ok(reg) = parse_reg(&token[1..=1]) {
+            if token.to_uppercase().starts_with('D') {
+                return Ok( match opcode {
+                    OpType::Movem => RegisterList(1 << reg),
+                    _ => DataRegister(reg),
+                })
+            } else if token.to_uppercase().starts_with('A') {
+                return Ok( match opcode {
+                    OpType::Movem => RegisterList(1 << (reg + 8)),
+                    _ => AddressRegister(reg),
+                })
             }
-
-            Err(_) => (),
         }
     }
 
@@ -267,10 +263,7 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
                 }
 
                 1 => {
-                    let disp = match parse_n(paren_token[..commas[0].0].trim()) {
-                        Ok(val) => val as i16,
-                        Err(e) => return Err(e),
-                    };
+                    let disp = parse_n(paren_token[..commas[0].0].trim())? as i16;
 
                     let second = paren_token[commas[0].0 + 1..paren_token.len()].trim();
 
@@ -284,10 +277,7 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
                 }
 
                 2 => {
-                    let disp = match parse_n(paren_token[..commas[0].0].trim()) {
-                        Ok(val) => val as i8,
-                        Err(e) => return Err(e),
-                    };
+                    let disp = parse_n(paren_token[..commas[0].0].trim())? as i8;
 
                     let third = paren_token[commas[1].0 + 1..paren_token.len()].trim();
 
@@ -338,21 +328,12 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
     } else if token.to_uppercase() == "USP" {
         Ok(USP)
     } else if token.to_lowercase().ends_with(".w") {
-        match parse_n(&token[..token.len() - 2]) {
-            Ok(val) => Ok(AbsoluteShort(val as u16)),
-            Err(e) => return Err(e),
-        }
+        Ok(AbsoluteShort(parse_n(&token[..token.len() - 2])? as u16))
     } else if token.to_lowercase().ends_with(".l") {
-        match parse_n(&token[..token.len() - 2]) {
-            Ok(val) => Ok(AbsoluteLong(Value::Number(val as u32))),
-            Err(e) => return Err(e),
-        }
+        Ok(AbsoluteLong(Value::Number(parse_n(&token[..token.len() - 2])? as u32)))
     } else {
         match opcode {
-            OpType::Movem => match movem(token) {
-                Ok(mask) => Ok(RegisterList(mask)),
-                Err(e) => return Err(e),
-            }
+            OpType::Movem => Ok(RegisterList(movem(token)?)),
 
             OpType::Branch(_) | OpType::Dbcc(_) => Ok(BranchDisplacement(size, Value::new(token, last_label))),
 

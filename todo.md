@@ -8,3 +8,4 @@
 - [ ] write tests for all opcodes and addressing modes
 - [ ] documentation
 - [ ] replace todo!() with proper errors
+- [ ] support other CPUs in the 68k series

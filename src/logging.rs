@@ -15,6 +15,7 @@ pub enum Log {
     InvalidAddressingMode,
     TooManyOperands,
     LabelRedefinition,
+    CpuTypeModeNotValid,
 }
 
 impl Log {
@@ -32,6 +33,7 @@ impl Log {
             Self::InvalidAddressingMode => "Invalid addressing mode",
             Self::TooManyOperands => "Expected one operand, found two",
             Self::LabelRedefinition => "Label redefinition",
+            Self::CpuTypeModeNotValid => "This addressing mode is not valid for this CPU type",
         }
     }
 }
