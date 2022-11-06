@@ -2,7 +2,7 @@
 
 use crate::{logging::Log};
 
-use super::{parse_n, OpSize, OpType, Value, CCR_MASK, MOVEM_MASK, SR_MASK, USP_MASK};
+use super::{parse_n, OpSize, OpType, value::{Value, self}, constants::*};
 
 #[derive(Debug, PartialEq)]
 pub enum AddressingMode {
@@ -15,7 +15,7 @@ pub enum AddressingMode {
     AddressIndex(i8, u8, u8, bool, bool),
     PCDisplacement(i16),
     PCIndex(i8, u8, bool, bool), // disp, Xn, reg type, reg size
-    AbsoluteShort(u16),
+    AbsoluteShort(Value),
     AbsoluteLong(Value),
     Immediate(OpSize, Value),
 
@@ -103,7 +103,11 @@ impl AddressingMode {
                 vec![((*reg_type as u16) << 15) | ((*reg as u16) << 12) | ((*reg_size as u16) << 11) | *disp as u16],
             ),
 
-            Self::AbsoluteShort(addr) => (0b111, 0b000, vec![*addr]),
+            Self::AbsoluteShort(value) => {
+                let addr = value.resolve_value(labels, defines)?;
+                (0b111, 0b000, vec![addr as u16])
+            }
+
             Self::AbsoluteLong(value) => {
                 let addr = value.resolve_value(labels, defines)?;
                 (0b111, 0b001, vec![(addr >> 16) as u16, addr as u16])
@@ -328,7 +332,7 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
     } else if token.to_uppercase() == "USP" {
         Ok(USP)
     } else if token.to_lowercase().ends_with(".w") {
-        Ok(AbsoluteShort(parse_n(&token[..token.len() - 2])? as u16))
+        Ok(AbsoluteShort(Value::Number((parse_n(&token[..token.len() - 2])? & 0xFFFF) as u32)))
     } else if token.to_lowercase().ends_with(".l") {
         Ok(AbsoluteLong(Value::Number(parse_n(&token[..token.len() - 2])? as u32)))
     } else {

@@ -1,24 +1,18 @@
 #![allow(clippy::unusual_byte_groupings)]
 
-const CCR_MASK:   u16 = 0b0001_000_000;
-const SR_MASK:    u16 = 0b0010_000_000;
-const USP_MASK:   u16 = 0b0100_000_000;
-const MOVEM_MASK: u16 = 0b1000_000_000;
-
-const MODE_MASK: u16 = 0b111_000;
-const ADDRESS_REGISTER_MASK: u16 = 0b001_000;
-
 mod addressing;
 mod opsize;
 mod optype;
+mod value;
+mod constants;
+
+use crate::{logging::Log, assembler::constants::*};
+
+use addressing::AddressingMode;
+use opsize::OpSize;
+use optype::OpType;
 
 use std::collections::HashMap;
-
-use crate::logging::Log;
-use addressing::AddressingMode;
-
-use self::opsize::OpSize;
-use self::optype::OpType;
 
 #[derive(Debug)]
 struct TokenizedString {
@@ -36,47 +30,10 @@ struct Decoded { //todo: rename
     location: u32,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Value {
-    Number(u32),
-    Label(String),
-    Define(String),
-}
-
-impl Value {
-    fn resolve_value(&self, labels: &HashMap<String, u32>, defines: &HashMap<String, u32>) -> Result<u32, Log> {
-        match self {
-            Value::Number(num) => Ok(*num),
-
-            Value::Label(label) => match labels.get(label) {
-                Some(val) => Ok(*val),
-                None => Err(Log::NoLabel),
-            },
-
-            Value::Define(name) => match defines.get(name) {
-                Some(val) => Ok(*val),
-                None => Err(Log::NoDefine),
-            },
-        }
-    }
-
-    fn new(token: &str, last_label: &str) -> Value {
-        match parse_n(token) {
-            Ok(number) => Value::Number(number as u32),
-    
-            Err(_) => {
-                if let Some(define) = token.strip_prefix('!') {
-                    Value::Define(define.to_string())
-                } else if token.starts_with('.') {
-                    let mut sub_label = last_label.to_string();
-                    sub_label.push_str(token);
-                    Value::Label(sub_label)
-                } else {
-                    Value::Label(token.to_string())
-                }
-            }
-        }
-    }
+#[derive(Default)]
+enum CpuType {
+    #[default] MC68000,
+    MC68010,
 }
 
 enum DataType {
@@ -98,12 +55,6 @@ impl DataType {
             _ => None,
         }
     }
-}
-
-#[derive(Default)]
-enum CpuType {
-    #[default] MC68000,
-    MC68010,
 }
 
 #[derive(Default)]
@@ -373,7 +324,7 @@ impl Assembler {
                 let ea = match ea_b1 {
                     CCR_MASK => {
                         if op.op_size == B {
-                            0b111_100
+                            IMMEDIATE_MASK
                         } else {
                             todo!("error")
                         }
@@ -381,7 +332,7 @@ impl Assembler {
 
                     SR_MASK => {
                         if op.op_size == W {
-                            0b111_100
+                            IMMEDIATE_MASK
                         } else {
                             todo!("error")
                         }
@@ -552,13 +503,14 @@ impl Assembler {
             Misc1(_) | Tst => {
                 match (&op.op_type, &self.cpu_type) {
                     (Tst, CpuType::MC68000 | CpuType::MC68010) => {
-                        if ea_a1 & MODE_MASK == ADDRESS_REGISTER_MASK || ea_a1 == 0b111_100 || ea_a1 == 0b111_010 || ea_a1 == 0b111_011 {
+                        if ea_a1 & MODE_MASK == ADDRESS_REGISTER_MASK || ea_a1 == IMMEDIATE_MASK || ea_a1 == 0b111_010 || ea_a1 == 0b111_011 {
                             return Err(Log::CpuTypeModeNotValid);
                         }
                     }
 
                     _ => (),
                 }
+
                 let mut format = vec![op.op_type.format() | op.op_size.size1() | ea_a1];
                 format.extend(ea_a2);
                 format
