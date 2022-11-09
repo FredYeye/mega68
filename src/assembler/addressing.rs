@@ -1,8 +1,10 @@
 #![allow(clippy::upper_case_acronyms)]
 
+use std::collections::HashMap;
+
 use crate::{logging::Log};
 
-use super::{parse_n, OpSize, OpType, value::{Value, self}, constants::*};
+use super::{parse_n, OpSize, OpType, value::Value, constants::*};
 
 #[derive(Debug, PartialEq)]
 pub enum AddressingMode {
@@ -12,9 +14,9 @@ pub enum AddressingMode {
     AddressPostincrement(u8),
     AddressPredecrement(u8),
     AddressDisplacement(i16, u8),
-    AddressIndex(i8, u8, u8, bool, bool),
+    AddressIndex(Value, u8, u8, bool, bool),
     PCDisplacement(i16),
-    PCIndex(i8, u8, bool, bool), // disp, Xn, reg type, reg size
+    PCIndex(Value, u8, bool, bool), // disp, Xn, reg type, reg size
     AbsoluteShort(Value),
     AbsoluteLong(Value),
     Immediate(OpSize, Value),
@@ -80,7 +82,7 @@ impl AddressingMode {
         }
     }
 
-    pub fn effective_addressing(&self, labels: &std::collections::HashMap<String, u32>, defines: &std::collections::HashMap<String, u32>) -> Result<(u16, Vec<u16>), Log> {
+    pub fn effective_addressing(&self, labels: &HashMap<String, u32>, defines: &HashMap<String, u32>, location: u32) -> Result<(u16, Vec<u16>), Log> {
         let ea = match self {
             Self::DataRegister(reg) => (0b000, *reg, vec![]),
             Self::AddressRegister(reg) => (0b001, *reg, vec![]),
@@ -90,18 +92,27 @@ impl AddressingMode {
             Self::AddressPredecrement(reg) => (0b100, *reg, vec![]),
             Self::AddressDisplacement(disp, reg) => (0b101, *reg, vec![*disp as u16]),
 
-            Self::AddressIndex(disp, reg_a, reg, reg_type, reg_size) => (
-                0b110,
-                *reg_a,
-                vec![((*reg_type as u16) << 15) | ((*reg as u16) << 12) | ((*reg_size as u16) << 11) | *disp as u16],
-            ),
+            Self::AddressIndex(value, reg_a, reg, reg_type, reg_size) => {
+                let disp = value.resolve_value(labels, defines)? as i8 - (location as i8 + 2);
+
+                (
+                    0b110,
+                    *reg_a,
+                    vec![((*reg_type as u16) << 15) | ((*reg as u16) << 12) | ((*reg_size as u16) << 11) | disp as u16],
+                )
+            }
 
             Self::PCDisplacement(disp) => (0b111, 0b010, vec![*disp as u16]),
-            Self::PCIndex(disp, reg, reg_type, reg_size) => (
-                0b111,
-                0b011,
-                vec![((*reg_type as u16) << 15) | ((*reg as u16) << 12) | ((*reg_size as u16) << 11) | *disp as u16],
-            ),
+
+            Self::PCIndex(value, reg, reg_type, reg_size) => {
+                let disp = value.resolve_value(labels, defines)? as i8 - (location as i8 + 2);
+
+                (
+                    0b111,
+                    0b011,
+                    vec![((*reg_type as u16) << 15) | ((*reg as u16) << 12) | ((*reg_size as u16) << 11) | disp as u16],
+                )
+            }
 
             Self::AbsoluteShort(value) => {
                 let addr = value.resolve_value(labels, defines)?;
@@ -136,7 +147,9 @@ impl AddressingMode {
                     _ => todo!(),
                 };
 
-                (0, size, vec![value.resolve_value(labels, defines)? as u16])
+                let disp = value.resolve_value(labels, defines)? as i16 - (location as i16 + 2);
+
+                (0, size, vec![disp as u16])
             }
 
             Self::CCR => (CCR_MASK >> 3, 0, vec![]),
@@ -281,7 +294,7 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
                 }
 
                 2 => {
-                    let disp = parse_n(paren_token[..commas[0].0].trim())? as i8;
+                    let disp = Value::new(paren_token[..commas[0].0].trim(), last_label);
 
                     let third = paren_token[commas[1].0 + 1..paren_token.len()].trim();
 

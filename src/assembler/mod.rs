@@ -92,7 +92,6 @@ impl Assembler {
             self.line += 1;
 
             let trimmed_str = lines.split(';').next().unwrap().trim();
-
             let separated_op: Vec<&str> = trimmed_str.splitn(2, ' ').collect();
 
             if separated_op[0].is_empty() {
@@ -100,6 +99,7 @@ impl Assembler {
             }
 
             if let Some(data_type) = DataType::is_data(separated_op[0]) {
+                //todo: need to move this to the 2nd pass, to have access to defines and labels
                 self.data_define(separated_op[1], data_type)?;
                 continue;
             }
@@ -304,16 +304,16 @@ impl Assembler {
 
         op.op_type.is_valid_modes(&op.operands)?;
 
-        let (ea_a1, ea_a2) = op.operands[0].effective_addressing(&self.labels, &self.defines)?;
-        let (ea_b1, ea_b2) = op.operands[1].effective_addressing(&self.labels, &self.defines)?;
+        let (ea_a1, ea_a2) = op.operands[0].effective_addressing(&self.labels, &self.defines, op.location)?;
+        let (ea_b1, ea_b2) = op.operands[1].effective_addressing(&self.labels, &self.defines, op.location)?;
 
         Ok(match &op.op_type {
             Branch(_) => {
-                let offset = (ea_a2[0] as i16 - (op.location as i16 + 2)) as u16;
+                // let offset = (ea_a2[0] as i16 - (op.location as i16 + 2)) as u16;
 
                 match op.op_size {
-                    B => vec![op.op_type.format() | (offset & 0xFF)],
-                    W => vec![op.op_type.format(), offset],
+                    B => vec![op.op_type.format() | (ea_a2[0] & 0xFF)],
+                    W => vec![op.op_type.format(), ea_a2[0]],
                     _ => unreachable!(),
                 }
             }
@@ -483,14 +483,19 @@ impl Assembler {
             BitManip(_) => {
                 let op1 = match ea_a1 & MODE_MASK == 0b000_000 {
                     true => (((ea_a1 & 0b111) << 9) | (1 << 8), vec![]),
-                    false => ((1 << 11), vec![(ea_a2[0] & 0xFF) as u16]),
+                    false => {
+                        let asd = match ea_b1 & MODE_MASK == DATA_REGISTER_MASK {
+                            true  => 1,
+                            false => 0,
+                        };
+
+                        ((1 << 11), vec![(ea_a2[asd] & 0xFF) as u16])
+                    }
                 };
 
-                if op.op_size == B {
-                    if ea_b1 & MODE_MASK == 0b000_000 {
-                        todo!("error")
-                    }
-                } else if op.op_size == L && op1.0 & MODE_MASK != 0b000_000 {
+                if op.op_size == B && ea_b1 & MODE_MASK == 0b000_000 {
+                    todo!("error")
+                } else if op.op_size == L && ea_b1 & MODE_MASK != 0b000_000 {
                     todo!("error")
                 }
 
@@ -687,3 +692,16 @@ fn parse_n(token: &str) -> Result<u64, Log> {
         }
     }
 }
+
+// ----- tests
+
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+
+//     #[test]
+//     fn tester() {
+//         let asd = parse_n("12");
+//         assert_eq!(asd, Ok(12));
+//     }
+// }

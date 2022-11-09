@@ -12,12 +12,12 @@ fn main() {
     let file_out = if args.len() > 2 {
         args[2].clone()
     } else {
-        let first = match file_in.rsplit_once('.') {
-            Some((name, _)) => name,
+        let name = match file_in.rsplit_once('.') {
+            Some((file_name, _)) => file_name,
             None => file_in,
         };
 
-        format!("{first}.bin")
+        format!("{name}.bin")
     };
 
     let mut asm = assembler::Assembler::default();
@@ -38,5 +38,26 @@ fn main() {
         }
 
         Err((err_type, l)) => println!("Line {}: {}", l, err_type.print()),
+    }
+}
+
+// ----- tests
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tester() -> Result<(), (logging::Log, u32)> {
+        let mut asm = assembler::Assembler::default();
+        assert_eq!(asm.run("nop")?, &vec![0x4E71]);
+        Ok(())
+    }
+
+    #[test]
+    fn tester2() -> Result<(), (logging::Log, u32)> {
+        let mut asm = assembler::Assembler::default();
+        assert_eq!(asm.run("btst.l #2, D0")?, &vec![0x0800, 0x0002]);
+        Ok(())
     }
 }

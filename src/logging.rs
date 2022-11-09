@@ -2,6 +2,7 @@
 //     warn: Vec<(u32, LogWarn)>,
 // }
 
+#[derive(Debug, PartialEq)]
 pub enum Log {
     InvalidOp,
     InvalidSuffix,

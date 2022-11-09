@@ -32,16 +32,14 @@ impl Value {
         match parse_n(token) {
             Ok(number) => Value::Number(number as u32),
     
-            Err(_) => {
-                if let Some(define) = token.strip_prefix('!') {
-                    Value::Define(define.to_string())
-                } else if token.starts_with('.') {
-                    let mut sub_label = last_label.to_string();
-                    sub_label.push_str(token);
-                    Value::Label(sub_label)
-                } else {
-                    Value::Label(token.to_string())
-                }
+            Err(_) => if let Some(define) = token.strip_prefix('!') {
+                Value::Define(define.to_string())
+            } else if token.starts_with('.') {
+                let mut sub_label = last_label.to_string();
+                sub_label.push_str(token);
+                Value::Label(sub_label)
+            } else {
+                Value::Label(token.to_string())
             }
         }
     }
