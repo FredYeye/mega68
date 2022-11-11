@@ -1,5 +1,6 @@
 mod assembler;
 mod logging;
+mod tests;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -38,26 +39,5 @@ fn main() {
         }
 
         Err((err_type, l)) => println!("Line {}: {}", l, err_type.print()),
-    }
-}
-
-// ----- tests
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn tester() -> Result<(), (logging::Log, u32)> {
-        let mut asm = assembler::Assembler::default();
-        assert_eq!(asm.run("nop")?, &vec![0x4E71]);
-        Ok(())
-    }
-
-    #[test]
-    fn tester2() -> Result<(), (logging::Log, u32)> {
-        let mut asm = assembler::Assembler::default();
-        assert_eq!(asm.run("btst.l #2, D0")?, &vec![0x0800, 0x0002]);
-        Ok(())
     }
 }

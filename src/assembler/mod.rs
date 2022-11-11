@@ -14,6 +14,8 @@ use optype::OpType;
 
 use std::collections::HashMap;
 
+use self::value::Value;
+
 #[derive(Debug)]
 struct TokenizedString {
     opcode: String,
@@ -36,6 +38,7 @@ enum CpuType {
     MC68010,
 }
 
+#[derive(Debug)]
 enum DataType {
     Data08,
     Data16,
@@ -65,7 +68,7 @@ pub struct Assembler {
     line: u32,
     labels: HashMap<String, u32>,
     last_label: String,
-    defines: HashMap<String, u32>,
+    defines: HashMap<String, u64>,
     cpu_type: CpuType,
 }
 
@@ -99,7 +102,6 @@ impl Assembler {
             }
 
             if let Some(data_type) = DataType::is_data(separated_op[0]) {
-                //todo: need to move this to the 2nd pass, to have access to defines and labels
                 self.data_define(separated_op[1], data_type)?;
                 continue;
             }
@@ -114,7 +116,7 @@ impl Assembler {
 
                 if let Some(define_val) = define_val.strip_prefix('=') {
                     let val = parse_n(define_val.trim_start())?;
-                    self.defines.insert(define_name.to_string(), val as u32);
+                    self.defines.insert(define_name.to_string(), val);
                 }
 
                 continue;
@@ -260,38 +262,31 @@ impl Assembler {
         let mut vec = Vec::new();
 
         for data in list.split(',').map(|x| x.trim()) {
-            // check for labels here
-            let val = parse_n(data)?;
-
-            vec.extend(match size {
-                DataType::Data08 => val.to_be_bytes()[7..=7].to_vec(),
-                DataType::Data16 => val.to_be_bytes()[6..=7].to_vec(),
-                DataType::Data24 => val.to_be_bytes()[5..=7].to_vec(),
-                DataType::Data32 => val.to_be_bytes()[4..=7].to_vec(),
-                DataType::Data64 => val.to_be_bytes().to_vec(),
-            });
+            vec.push(Value::new(data, &self.last_label));
         }
 
-        if vec.len() & 1 != 0 {
-            //probably print a warning here
-            vec.push(0);
-        }
+        let mut len = vec.len() * match size {
+            DataType::Data08 => 1,
+            DataType::Data16 => 2,
+            DataType::Data24 => 3,
+            DataType::Data32 => 4,
+            DataType::Data64 => 8,
+        };
 
-        let vec2: Vec<u16> = vec
-            .chunks_exact(2)
-            .into_iter()
-            .map(|x| u16::from_be_bytes([x[0], x[1]]))
-            .collect();
+        if len & 1 != 0 {
+            // probably print a warning here
+            len += 1;
+        }
 
         self.tokens.push(Decoded {
-            op_type: OpType::Data(vec2),
+            op_type: OpType::Data(size, vec),
             op_size: OpSize::Unsized,
             operands: [AddressingMode::Empty, AddressingMode::Empty],
             line: self.line,
             location: self.location,
         });
 
-        self.location += vec.len() as u32;
+        self.location += len as u32;
 
         Ok(())
     }
@@ -309,8 +304,6 @@ impl Assembler {
 
         Ok(match &op.op_type {
             Branch(_) => {
-                // let offset = (ea_a2[0] as i16 - (op.location as i16 + 2)) as u16;
-
                 match op.op_size {
                     B => vec![op.op_type.format() | (ea_a2[0] & 0xFF)],
                     W => vec![op.op_type.format(), ea_a2[0]],
@@ -531,8 +524,8 @@ impl Assembler {
                 let mode = match ea_b1 & MODE_MASK == 0b000_000 {
                     true => {
                         let (count_reg, ir) = match ea_a1 & MODE_MASK == 0b000_000 {
-                            true => (ea_a1 & 0b111, false),
-                            false => (ea_a2[0] & 0b111, true),
+                            true => (ea_a1 & 0b111, true),
+                            false => (ea_a2[0] & 0b111, false),
                         };
 
                         let mut bits = (ea_b1 & 0b111) | ((*rot_type as u16) << 3);
@@ -667,7 +660,35 @@ impl Assembler {
                 format
             }
 
-            Data(data) => data.to_vec(),
+            Data(size, values) => {
+                let mut vec = Vec::new();
+
+                for value in values {
+                    let number = value.resolve_value(&self.labels, &self.defines)?.to_be_bytes();
+
+                    let range = match size {
+                        DataType::Data08 => 7..=7,
+                        DataType::Data16 => 6..=7,
+                        DataType::Data24 => 5..=7,
+                        DataType::Data32 => 4..=7,
+                        DataType::Data64 => 0..=7,
+                    };
+
+                    vec.extend_from_slice(&number[range]);
+                }
+
+                if vec.len() & 1 != 0 {
+                    vec.push(0);
+                }
+
+                let vec2: Vec<u16> = vec
+                    .chunks_exact(2)
+                    .into_iter()
+                    .map(|x| u16::from_be_bytes([x[0], x[1]]))
+                    .collect();
+
+                vec2
+            }
         })
     }
 }
@@ -692,16 +713,3 @@ fn parse_n(token: &str) -> Result<u64, Log> {
         }
     }
 }
-
-// ----- tests
-
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-
-//     #[test]
-//     fn tester() {
-//         let asd = parse_n("12");
-//         assert_eq!(asd, Ok(12));
-//     }
-// }

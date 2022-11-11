@@ -2,7 +2,7 @@
 
 use crate::logging::Log;
 
-use super::{addressing::AddressingList, addressing::AddressingMode, OpSize};
+use super::{addressing::AddressingList, addressing::AddressingMode, OpSize, value::Value, DataType};
 
 #[derive(Debug)]
 pub enum OpType {
@@ -45,7 +45,7 @@ pub enum OpType {
     Movep,
     Movem,
 
-    Data(Vec<u16>),
+    Data(DataType, Vec<Value>),
 }
 
 impl OpType {
@@ -118,7 +118,7 @@ impl OpType {
             Movep => 0b1_0_0_001 << 3,
             Movem => 0b0100_1_0_001 << 7,
 
-            Data(_) => 0, //unused
+            Data(_, _) => 0, //unused
         }
     }
 
@@ -290,7 +290,7 @@ impl OpType {
             Dbcc(_) | Swap => WU,
             Exg | Lea | MoveQ | Pea => LU,
 
-            Data(_) => Unsized, //unused
+            Data(_, _) => Unsized, //unused
         };
 
         match size.mask() & valid.mask() != 0 {
@@ -394,7 +394,7 @@ impl OpType {
                 }
             }
 
-            Data(_) => [None, None], //unused
+            Data(_, _) => [None, None], //unused
         }
     }
 

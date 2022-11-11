@@ -82,7 +82,7 @@ impl AddressingMode {
         }
     }
 
-    pub fn effective_addressing(&self, labels: &HashMap<String, u32>, defines: &HashMap<String, u32>, location: u32) -> Result<(u16, Vec<u16>), Log> {
+    pub fn effective_addressing(&self, labels: &HashMap<String, u32>, defines: &HashMap<String, u64>, location: u32) -> Result<(u16, Vec<u16>), Log> {
         let ea = match self {
             Self::DataRegister(reg) => (0b000, *reg, vec![]),
             Self::AddressRegister(reg) => (0b001, *reg, vec![]),
@@ -93,7 +93,10 @@ impl AddressingMode {
             Self::AddressDisplacement(disp, reg) => (0b101, *reg, vec![*disp as u16]),
 
             Self::AddressIndex(value, reg_a, reg, reg_type, reg_size) => {
-                let disp = value.resolve_value(labels, defines)? as i8 - (location as i8 + 2);
+                let disp = match value {
+                    Value::Number(_) | Value::Define(_) => value.resolve_value(labels, defines)? as i8,
+                    Value::Label(_) => value.resolve_value(labels, defines)? as i8 - (location as i8 + 2),
+                };
 
                 (
                     0b110,
@@ -105,7 +108,10 @@ impl AddressingMode {
             Self::PCDisplacement(disp) => (0b111, 0b010, vec![*disp as u16]),
 
             Self::PCIndex(value, reg, reg_type, reg_size) => {
-                let disp = value.resolve_value(labels, defines)? as i8 - (location as i8 + 2);
+                let disp = match value {
+                    Value::Number(_) | Value::Define(_) => value.resolve_value(labels, defines)? as i8,
+                    Value::Label(_) => value.resolve_value(labels, defines)? as i8 - (location as i8 + 2),
+                };
 
                 (
                     0b111,
@@ -147,7 +153,10 @@ impl AddressingMode {
                     _ => todo!(),
                 };
 
-                let disp = value.resolve_value(labels, defines)? as i16 - (location as i16 + 2);
+                let disp = match value {
+                    Value::Number(_) | Value::Define(_) => value.resolve_value(labels, defines)? as i16,
+                    Value::Label(_) => value.resolve_value(labels, defines)? as i16 - (location as i16 + 2),
+                };
 
                 (0, size, vec![disp as u16])
             }
@@ -156,7 +165,7 @@ impl AddressingMode {
             Self::SR => (SR_MASK >> 3, 0, vec![]),
             Self::USP => (USP_MASK >> 3, 0, vec![]),
             Self::RegisterList(mask) => (MOVEM_MASK >> 3, 0, vec![*mask]),
-            Self::DataQuick(imm) => (0, 0, vec![(imm.resolve_value(labels, defines)? & 0xFF) as u16]),
+            Self::DataQuick(imm) => (0b111, 0b100, vec![(imm.resolve_value(labels, defines)? & 0xFF) as u16]), //make dataquick look like immediate
             Self::Empty => (0b111, 0b111, vec![]),
         };
 
@@ -345,9 +354,9 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
     } else if token.to_uppercase() == "USP" {
         Ok(USP)
     } else if token.to_lowercase().ends_with(".w") {
-        Ok(AbsoluteShort(Value::Number((parse_n(&token[..token.len() - 2])? & 0xFFFF) as u32)))
+        Ok(AbsoluteShort(Value::Number((parse_n(&token[..token.len() - 2])? & 0xFFFF) as u64)))
     } else if token.to_lowercase().ends_with(".l") {
-        Ok(AbsoluteLong(Value::Number(parse_n(&token[..token.len() - 2])? as u32)))
+        Ok(AbsoluteLong(Value::Number(parse_n(&token[..token.len() - 2])? as u64)))
     } else {
         match opcode {
             OpType::Movem => Ok(RegisterList(movem(token)?)),

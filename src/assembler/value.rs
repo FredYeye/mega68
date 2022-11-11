@@ -6,18 +6,18 @@ use super::parse_n;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
-    Number(u32),
+    Number(u64),
     Label(String),
     Define(String),
 }
 
 impl Value {
-    pub fn resolve_value(&self, labels: &HashMap<String, u32>, defines: &HashMap<String, u32>) -> Result<u32, Log> {
+    pub fn resolve_value(&self, labels: &HashMap<String, u32>, defines: &HashMap<String, u64>) -> Result<u64, Log> {
         match self {
             Value::Number(num) => Ok(*num),
 
             Value::Label(label) => match labels.get(label) {
-                Some(val) => Ok(*val),
+                Some(val) => Ok(*val as u64),
                 None => Err(Log::NoLabel),
             },
 
@@ -30,7 +30,7 @@ impl Value {
 
     pub fn new(token: &str, last_label: &str) -> Value {
         match parse_n(token) {
-            Ok(number) => Value::Number(number as u32),
+            Ok(number) => Value::Number(number),
     
             Err(_) => if let Some(define) = token.strip_prefix('!') {
                 Value::Define(define.to_string())
