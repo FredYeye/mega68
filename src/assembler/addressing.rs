@@ -353,10 +353,10 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
         Ok(SR)
     } else if token.to_uppercase() == "USP" {
         Ok(USP)
-    } else if token.to_lowercase().ends_with(".w") {
-        Ok(AbsoluteShort(Value::Number((parse_n(&token[..token.len() - 2])? & 0xFFFF) as u64)))
-    } else if token.to_lowercase().ends_with(".l") {
-        Ok(AbsoluteLong(Value::Number(parse_n(&token[..token.len() - 2])? as u64)))
+    } else if let Some(abs_w) = token.strip_suffix(".w") {
+        Ok(AbsoluteShort(Value::new(abs_w, last_label)))
+    } else if let Some(abs_l) = token.strip_suffix(".l") {
+        Ok(AbsoluteLong(Value::new(abs_l, last_label)))
     } else {
         match opcode {
             OpType::Movem => Ok(RegisterList(movem(token)?)),
