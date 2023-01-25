@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use crate::{logging::Log};
+use crate::logging::Log;
 
 use super::{parse_n, OpSize, OpType, value::Value, constants::*};
 
@@ -13,7 +13,7 @@ pub enum AddressingMode {
     Address(u8),
     AddressPostincrement(u8),
     AddressPredecrement(u8),
-    AddressDisplacement(i16, u8),
+    AddressDisplacement(Value, u8),
     AddressIndex(Value, u8, u8, bool, bool),
     PCDisplacement(i16),
     PCIndex(Value, u8, bool, bool), // disp, Xn, reg type, reg size
@@ -90,7 +90,7 @@ impl AddressingMode {
             Self::Address(reg) => (0b010, *reg, vec![]),
             Self::AddressPostincrement(reg) => (0b011, *reg, vec![]),
             Self::AddressPredecrement(reg) => (0b100, *reg, vec![]),
-            Self::AddressDisplacement(disp, reg) => (0b101, *reg, vec![*disp as u16]),
+            Self::AddressDisplacement(disp, reg) => (0b101, *reg, vec![disp.resolve_value(labels, defines)? as u16]),
 
             Self::AddressIndex(value, reg_a, reg, reg_type, reg_size) => {
                 let disp = match value {
@@ -289,14 +289,14 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
                 }
 
                 1 => {
-                    let disp = parse_n(paren_token[..commas[0].0].trim())? as i16;
+                    let disp = paren_token[..commas[0].0].trim();
 
                     let second = paren_token[commas[0].0 + 1..paren_token.len()].trim();
 
                     if second == "PC" {
-                        Ok(PCDisplacement(disp))
+                        Ok(PCDisplacement(parse_n(paren_token[..commas[0].0].trim())? as i16))
                     } else if second.len() == 2 && second.starts_with('A') {
-                        Ok(AddressDisplacement(disp, parse_reg(&second[1..=1])?))
+                        Ok(AddressDisplacement(Value::new(disp, last_label), parse_reg(&second[1..=1])?))
                     } else {
                         todo!("error")
                     }
