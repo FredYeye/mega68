@@ -13,20 +13,20 @@ pub enum OpSize {
 impl OpSize {
     pub fn mask(&self) -> u8 {
         match self {
-            OpSize::B   => 0b001,
-            OpSize::W   => 0b010,
-            OpSize::L   => 0b100,
+            OpSize::B       => 0b0001,
+            OpSize::W       => 0b0010,
+            OpSize::L       => 0b0100,
 
-            OpSize::BW  => 0b011,
-            OpSize::BL  => 0b101,
-            OpSize::WL  => 0b110,
+            OpSize::BW      => 0b0011,
+            OpSize::BL      => 0b0101,
+            OpSize::WL      => 0b0110,
 
-            OpSize::BWL => 0b111,
+            OpSize::BWL     => 0b0111,
 
             OpSize::Unsized => 0b1000,
-            OpSize::BU => 0b1001,
-            OpSize::WU => 0b1010,
-            OpSize::LU => 0b1100,
+            OpSize::BU      => 0b1001,
+            OpSize::WU      => 0b1010,
+            OpSize::LU      => 0b1100,
         }
     }
 

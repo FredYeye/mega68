@@ -4,7 +4,22 @@ use std::collections::HashMap;
 
 use crate::logging::Log;
 
-use super::{parse_n, OpSize, OpType, value::Value, constants::*};
+use super::{OpSize, OpType, value::Value, constants::*};
+
+#[derive(Debug, PartialEq)]
+pub enum RegType {
+    Dn,
+    An,
+}
+
+impl RegType {
+    fn value(&self) -> u16 {
+        match self {
+            Self::Dn => 0,
+            Self::An => 1,
+        }
+    }
+}
 
 #[derive(Debug, PartialEq)]
 pub enum AddressingMode {
@@ -14,9 +29,9 @@ pub enum AddressingMode {
     AddressPostincrement(u8),
     AddressPredecrement(u8),
     AddressDisplacement(Value, u8),
-    AddressIndex(Value, u8, u8, bool, bool),
+    AddressIndex(Value, u8, u8, RegType, bool),
     PCDisplacement(Value),
-    PCIndex(Value, u8, bool, bool), // disp, Xn, reg type, reg size
+    PCIndex(Value, u8, RegType, bool), // disp, Xn, reg type, reg size
     AbsoluteShort(Value),
     AbsoluteLong(Value),
     Immediate(OpSize, Value),
@@ -101,7 +116,7 @@ impl AddressingMode {
                 (
                     0b110,
                     *reg_a,
-                    vec![((*reg_type as u16) << 15) | ((*reg as u16) << 12) | ((*reg_size as u16) << 11) | disp as u16],
+                    vec![(reg_type.value() << 15) | ((*reg as u16) << 12) | ((*reg_size as u16) << 11) | disp as u16],
                 )
             }
 
@@ -116,7 +131,7 @@ impl AddressingMode {
                 (
                     0b111,
                     0b011,
-                    vec![((*reg_type as u16) << 15) | ((*reg as u16) << 12) | ((*reg_size as u16) << 11) | disp as u16],
+                    vec![(reg_type.value() << 15) | ((*reg as u16) << 12) | ((*reg_size as u16) << 11) | disp as u16],
                 )
             }
 
@@ -309,9 +324,9 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
                     let (reg_type, reg_num, reg_size) = if third.len() == 4 {
                         (
                             if third.starts_with('D') {
-                                false
+                                RegType::Dn
                             } else if third.starts_with('A') {
-                                true
+                                RegType::An
                             } else {
                                 todo!("error")
                             },
@@ -363,7 +378,7 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
             OpType::Branch(_) | OpType::Dbcc(_) => Ok(BranchDisplacement(size, Value::new(token, last_label))),
 
             _ => {
-                Ok(AbsoluteLong(Value::new(token, last_label))) //todo: pick short/long based on value
+                Ok(AbsoluteLong(Value::new(token, last_label))) //todo: pick short/long based on value size
             }
         }
     }
