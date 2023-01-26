@@ -15,7 +15,7 @@ pub enum AddressingMode {
     AddressPredecrement(u8),
     AddressDisplacement(Value, u8),
     AddressIndex(Value, u8, u8, bool, bool),
-    PCDisplacement(i16),
+    PCDisplacement(Value),
     PCIndex(Value, u8, bool, bool), // disp, Xn, reg type, reg size
     AbsoluteShort(Value),
     AbsoluteLong(Value),
@@ -105,7 +105,7 @@ impl AddressingMode {
                 )
             }
 
-            Self::PCDisplacement(disp) => (0b111, 0b010, vec![*disp as u16]),
+            Self::PCDisplacement(disp) => (0b111, 0b010, vec![disp.resolve_value(labels, defines)? as u16]),
 
             Self::PCIndex(value, reg, reg_type, reg_size) => {
                 let disp = match value {
@@ -289,14 +289,13 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
                 }
 
                 1 => {
-                    let disp = paren_token[..commas[0].0].trim();
-
+                    let disp = Value::new(paren_token[..commas[0].0].trim(), last_label);
                     let second = paren_token[commas[0].0 + 1..paren_token.len()].trim();
 
                     if second == "PC" {
-                        Ok(PCDisplacement(parse_n(paren_token[..commas[0].0].trim())? as i16))
+                        Ok(PCDisplacement(disp))
                     } else if second.len() == 2 && second.starts_with('A') {
-                        Ok(AddressDisplacement(Value::new(disp, last_label), parse_reg(&second[1..=1])?))
+                        Ok(AddressDisplacement(disp, parse_reg(&second[1..=1])?))
                     } else {
                         Err(Log::InvalidAddressingMode)
                     }
