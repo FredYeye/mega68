@@ -39,7 +39,7 @@ enum CpuType {
 }
 
 #[derive(Debug)]
-enum DataType {
+pub enum DataType {
     Data08,
     Data16,
     Data24,

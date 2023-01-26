@@ -298,7 +298,7 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
                     } else if second.len() == 2 && second.starts_with('A') {
                         Ok(AddressDisplacement(Value::new(disp, last_label), parse_reg(&second[1..=1])?))
                     } else {
-                        todo!("error")
+                        Err(Log::InvalidAddressingMode)
                     }
                 }
 
