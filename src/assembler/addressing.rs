@@ -105,33 +105,48 @@ impl AddressingMode {
             Self::Address(reg) => (0b010, *reg, vec![]),
             Self::AddressPostincrement(reg) => (0b011, *reg, vec![]),
             Self::AddressPredecrement(reg) => (0b100, *reg, vec![]),
-            Self::AddressDisplacement(disp, reg) => (0b101, *reg, vec![disp.resolve_value(labels, defines)? as u16]),
 
-            Self::AddressIndex(value, reg_a, reg, reg_type, reg_size) => {
-                let disp = match value {
-                    Value::Number(_) | Value::Define(_) => value.resolve_value(labels, defines)? as i8,
-                    Value::Label(_) => value.resolve_value(labels, defines)? as i8 - (location as i8 + 2),
-                };
+            Self::AddressDisplacement(disp, reg) => {
+                let mut disp2 = disp.resolve_value(labels, defines)? as i16;
+                if let Value::Label(_) = disp {
+                    disp2 -= location as i16 + 2;
+                }
+
+                (0b101, *reg, vec![disp2 as u16])
+            }
+
+            Self::AddressIndex(disp, reg_a, reg, reg_type, reg_size) => {
+                let mut disp2 = disp.resolve_value(labels, defines)? as i16;
+                if let Value::Label(_) = disp {
+                    disp2 -= location as i16 + 2;
+                }
 
                 (
                     0b110,
                     *reg_a,
-                    vec![(reg_type.value() << 15) | ((*reg as u16) << 12) | ((*reg_size as u16) << 11) | disp as u16],
+                    vec![(reg_type.value() << 15) | ((*reg as u16) << 12) | ((*reg_size as u16) << 11) | disp2 as u16],
                 )
             }
 
-            Self::PCDisplacement(disp) => (0b111, 0b010, vec![disp.resolve_value(labels, defines)? as u16]),
+            Self::PCDisplacement(disp) => {
+                let mut disp2 = disp.resolve_value(labels, defines)? as i16;
+                if let Value::Label(_) = disp {
+                    disp2 -= location as i16 + 2;
+                }
 
-            Self::PCIndex(value, reg, reg_type, reg_size) => {
-                let disp = match value {
-                    Value::Number(_) | Value::Define(_) => value.resolve_value(labels, defines)? as i8,
-                    Value::Label(_) => value.resolve_value(labels, defines)? as i8 - (location as i8 + 2),
-                };
+                (0b111, 0b010, vec![disp2 as u16])
+            }
+
+            Self::PCIndex(disp, reg, reg_type, reg_size) => {
+                let mut disp2 = disp.resolve_value(labels, defines)? as i16;
+                if let Value::Label(_) = disp {
+                    disp2 -= location as i16 + 2;
+                }
 
                 (
                     0b111,
                     0b011,
-                    vec![(reg_type.value() << 15) | ((*reg as u16) << 12) | ((*reg_size as u16) << 11) | disp as u16],
+                    vec![(reg_type.value() << 15) | ((*reg as u16) << 12) | ((*reg_size as u16) << 11) | disp2 as u16],
                 )
             }
 
@@ -161,19 +176,19 @@ impl AddressingMode {
                 )
             }
 
-            Self::BranchDisplacement(op_size, value) => {
+            Self::BranchDisplacement(op_size, disp) => {
                 let size = match op_size {
                     OpSize::B | OpSize::Unsized => 0, //let unsized through for dbcc
                     OpSize::W => 1,
                     _ => todo!(),
                 };
 
-                let disp = match value {
-                    Value::Number(_) | Value::Define(_) => value.resolve_value(labels, defines)? as i16,
-                    Value::Label(_) => value.resolve_value(labels, defines)? as i16 - (location as i16 + 2),
-                };
+                let mut disp2 = disp.resolve_value(labels, defines)? as i16;
+                if let Value::Label(_) = disp {
+                    disp2 -= location as i16 + 2;
+                }
 
-                (0, size, vec![disp as u16])
+                (0, size, vec![disp2 as u16])
             }
 
             Self::CCR => (CCR_MASK >> 3, 0, vec![]),

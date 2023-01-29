@@ -474,9 +474,19 @@ impl Assembler {
             }
 
             BitManip(_) => {
-                let op1 = match ea_a1 & MODE_MASK == 0b000_000 {
+                if op.op_size == B && ea_b1 & MODE_MASK == DATA_REGISTER_MASK {
+                    todo!("error")
+                    // return Err(Log::);
+                } else if op.op_size == L && ea_b1 & MODE_MASK != DATA_REGISTER_MASK {
+                    todo!("error")
+                    // return Err(Log::);
+                }
+
+                let op1 = match ea_a1 & MODE_MASK == DATA_REGISTER_MASK {
                     true => (((ea_a1 & 0b111) << 9) | (1 << 8), vec![]),
+
                     false => {
+                        //todo: rename asd and document what this does
                         let asd = match ea_b1 & MODE_MASK == DATA_REGISTER_MASK {
                             true  => 1,
                             false => 0,
@@ -485,12 +495,6 @@ impl Assembler {
                         ((1 << 11), vec![(ea_a2[asd] & 0xFF) as u16])
                     }
                 };
-
-                if op.op_size == B && ea_b1 & MODE_MASK == 0b000_000 {
-                    todo!("error")
-                } else if op.op_size == L && ea_b1 & MODE_MASK != 0b000_000 {
-                    todo!("error")
-                }
 
                 let mut format = vec![op.op_type.format() | op1.0 | ea_b1];
                 format.extend(op1.1);

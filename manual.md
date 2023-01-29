@@ -47,10 +47,11 @@ Labels are used to refer to specific offsets of the code. They are created by ap
 value:               ;this is a label
     d32 0x12345678
 ```
-When used with branches and displacement-style addressing modes, labels are converted to an offset automatically.
+When used with branches, index and displacement-style addressing modes, labels are converted to an offset automatically.
 ```
     bne.b  skip                   ;branch to label "skip" if not equal
     move.b (values, PC, D1.w), D0 ;otherwise, load byte from label "values" + D1.w
+    lea (values, PC), A0          ;load address of "values" into A0
 skip:
     rts
 
@@ -70,7 +71,7 @@ do_something:
 exit:
     ;...
 
-some_funtion:
+some_function:
     ;...
 exit: ;error: label redefinition!
     nop

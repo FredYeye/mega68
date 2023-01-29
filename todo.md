@@ -9,3 +9,5 @@
 - [ ] documentation
 - [ ] replace todo!() with proper errors
 - [ ] support other CPUs in the 68k series
+- [ ] display more than just one error at a time
+- [ ] sub labels of arbitrary depth
