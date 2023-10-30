@@ -17,6 +17,7 @@ pub enum Log {
     TooManyOperands,
     LabelRedefinition,
     CpuTypeModeNotValid,
+    SizeOperandMismatch,
 }
 
 impl Log {
@@ -35,6 +36,7 @@ impl Log {
             Self::TooManyOperands => "Expected one operand, found two",
             Self::LabelRedefinition => "Label redefinition",
             Self::CpuTypeModeNotValid => "This addressing mode is not valid for this CPU type",
+            Self::SizeOperandMismatch => "invalid size / operand combination",
         }
     }
 }

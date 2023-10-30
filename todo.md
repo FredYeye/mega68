@@ -11,3 +11,4 @@
 - [ ] support other CPUs in the 68k series
 - [ ] display more than just one error at a time
 - [ ] sub labels of arbitrary depth
+- [ ] math expressions ( lea (label + 0x10, PC), A0 )

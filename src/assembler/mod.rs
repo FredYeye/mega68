@@ -182,18 +182,14 @@ impl Assembler {
                 operands,
             };
 
-            match self.string_token_to_token(&string_token, self.line, self.location) {
-                Ok(token) => {
-                    self.location += match &token.op_type {
-                        // OpType::Data(data) => data.len() as u32 * 2, //unused!
-                        _ => 2 + AddressingMode::ea_size(&token.operands) as u32,
-                    };
+            let token = self.string_token_to_token(&string_token, self.line, self.location)?;
 
-                    self.tokens.push(token)
-                }
+            self.location += match &token.op_type {
+                // OpType::Data(data) => data.len() as u32 * 2, //unused!
+                _ => 2 + AddressingMode::ea_size(&token.operands) as u32,
+            };
 
-                Err(e) => return Err(e),
-            }
+            self.tokens.push(token);
         }
 
         Ok(())
@@ -474,12 +470,8 @@ impl Assembler {
             }
 
             BitManip(_) => {
-                if op.op_size == B && ea_b1 & MODE_MASK == DATA_REGISTER_MASK {
-                    todo!("error")
-                    // return Err(Log::);
-                } else if op.op_size == L && ea_b1 & MODE_MASK != DATA_REGISTER_MASK {
-                    todo!("error")
-                    // return Err(Log::);
+                if op.op_size == B && ea_b1 & MODE_MASK == DATA_REGISTER_MASK || op.op_size == L && ea_b1 & MODE_MASK != DATA_REGISTER_MASK {
+                    return Err(Log::SizeOperandMismatch);
                 }
 
                 let op1 = match ea_a1 & MODE_MASK == DATA_REGISTER_MASK {
