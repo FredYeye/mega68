@@ -18,6 +18,7 @@ pub enum Log {
     LabelRedefinition,
     CpuTypeModeNotValid,
     SizeOperandMismatch,
+    UnsupportedInstruction,
 }
 
 impl Log {
@@ -37,6 +38,7 @@ impl Log {
             Self::LabelRedefinition => "Label redefinition",
             Self::CpuTypeModeNotValid => "This addressing mode is not valid for this CPU type",
             Self::SizeOperandMismatch => "invalid size / operand combination",
+            Self::UnsupportedInstruction => "Target CPU does not support this instruction",
         }
     }
 }

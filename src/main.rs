@@ -1,9 +1,13 @@
+use assembler::CpuType;
+
 mod assembler;
 mod logging;
 mod tests;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+
+    //todo: update command line options handling
     let file_in = if args.len() > 1 {
         &args[1]
     } else {
@@ -21,7 +25,14 @@ fn main() {
         format!("{name}.bin")
     };
 
+    let target_cpu = if args.len() > 3 {
+        CpuType::MC68010
+    } else {
+        CpuType::MC68000
+    };
+
     let mut asm = assembler::Assembler::default();
+    asm.cpu_type = target_cpu;
 
     let text = std::fs::read_to_string(file_in).expect("couldn't read file");
 

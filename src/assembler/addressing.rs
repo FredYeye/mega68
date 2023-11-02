@@ -290,7 +290,8 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
         let val = Value::new(imm, last_label);
 
         Ok( match opcode {
-            OpType::MoveQ | OpType::Rotation(_, _) | OpType::AddSubQ(_) | OpType::Trap => DataQuick(val),
+            OpType::MoveQ | OpType::Rotation(_, _) | OpType::AddSubQ(_) |
+            OpType::Trap | OpType::Bkpt => DataQuick(val),
             _ => Immediate(size, val),
         })
     } else if let Some(predec) = token.strip_prefix("-(A") {

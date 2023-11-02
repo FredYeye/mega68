@@ -33,7 +33,7 @@ struct Decoded { //todo: rename
 }
 
 #[derive(Default)]
-enum CpuType {
+pub enum CpuType {
     #[default] MC68000,
     MC68010,
 }
@@ -69,7 +69,7 @@ pub struct Assembler {
     labels: HashMap<String, u32>,
     last_label: String,
     defines: HashMap<String, u64>,
-    cpu_type: CpuType,
+    pub cpu_type: CpuType,
 }
 
 impl Assembler {
@@ -592,6 +592,16 @@ impl Assembler {
             Trap => {
                 let vector = ea_a2[0] & 0b1111;
                 vec![op.op_type.format() | vector]
+            }
+
+            Bkpt => {
+                match self.cpu_type {
+                    CpuType::MC68000 => return Err(Log::UnsupportedInstruction),
+                    CpuType::MC68010 => {
+                        let vector = ea_a2[0] & 0b111;
+                        vec![op.op_type.format() | vector]
+                    }
+                }
             }
 
             Stop => {

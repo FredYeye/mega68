@@ -6,44 +6,45 @@ use super::{addressing::AddressingList, addressing::AddressingMode, OpSize, valu
 
 #[derive(Debug)]
 pub enum OpType {
-    Branch(u8),
-    NoOperands(u16),
     AddSub(bool), //false = add, true = sub
     AddSubA(bool),
-    AddSubX(bool),
     AddSubQ(bool),
-    Immediates(u8),
-    Jump(bool), //false = jsr, true = jmp
-    Move,
-    MoveA,
+    AddSubX(bool),
     Bcd(bool), //false = ABCD, true = SBCD
     BitManip(u8),
-    Misc1(u8),
-    OrAnd(bool), //false = or, true = and
-    MoveQ,
-    Rotation(u8, bool),
-    Lea,
+    Bkpt,
+    Branch(u8),
     Chk,
-    Exg,
-    Tst,
-    Ext,
-    Swap,
-    Unlk,
-    Link,
-    Trap,
-    Tas,
-    Stop,
-    Pea,
     Cmp,
     Cmpa,
     Cmpm,
-    Scc(u8),
-    Nbcd,
-    MulDiv(u16),
-    Eor,
     Dbcc(u8),
-    Movep,
+    Eor,
+    Exg,
+    Ext,
+    Immediates(u8),
+    Jump(bool), //false = jsr, true = jmp
+    Lea,
+    Link,
+    Misc1(u8),
+    Move,
+    MoveA,
     Movem,
+    Movep,
+    MoveQ,
+    MulDiv(u16),
+    Nbcd,
+    NoOperands(u16),
+    OrAnd(bool), //false = or, true = and
+    Pea,
+    Rotation(u8, bool),
+    Scc(u8),
+    Stop,
+    Swap,
+    Tas,
+    Trap,
+    Tst,
+    Unlk,
 
     Data(DataType, Vec<Value>),
 }
@@ -53,10 +54,6 @@ impl OpType {
         use OpType::*;
 
         match self {
-            Branch(cond) => u16::from_be_bytes([(0b0110 << 4) | cond, 0]),
-            NoOperands(data) => *data,
-            Immediates(imm) => (*imm as u16) << 9,
-
             AddSub(add_sub) | AddSubA(add_sub) | AddSubX(add_sub) => match add_sub {
                 false => 0b1101 << 12,
                 true  => 0b1001 << 12,
@@ -67,56 +64,55 @@ impl OpType {
                 true  => 0b0101_0001 << 8,
             },
 
-            Jump(jxx) => match jxx {
-                false => 0b0100111010 << 6,
-                true  => 0b0100111011 << 6,
-            },
-
-            Move => 0,
-            MoveA => 0b001 << 6,
-
             Bcd(add_sub) => match add_sub {
                 false => 0b1100_000_10000 << 4,
                 true  => 0b1000_000_10000 << 4,
             },
 
             BitManip(format) => (*format as u16) << 6,
+            Bkpt => 0b0100100001001 << 3,
+            Branch(cond) => u16::from_be_bytes([(0b0110 << 4) | cond, 0]),
+            Chk  => 0b0100_000_110 << 6,
+            Cmp  => 0b1011 << 12,
+            Cmpa => 0b1011_000_0_11 << 6,
+            Cmpm => 0b1011_000_1_00_001 << 3,
+            Dbcc(cond) => (0b0101_0000_11_001 << 3) | ((*cond as u16) << 8),
+            Eor => 0b1011_000_1 << 8,
+            Exg  => 0b1100_000_1 << 8,
+            Ext  => 0b0100_100_0_1 << 7,
+            Immediates(imm) => (*imm as u16) << 9,
 
+            Jump(jxx) => match jxx {
+                false => 0b0100111010 << 6,
+                true  => 0b0100111011 << 6,
+            },
+
+            Lea  => 0b0100_000_111 << 6,
+            Link => 0b0100_111001010 << 3,
             Misc1(format) => (*format as u16) << 8,
+            Move => 0,
+            MoveA => 0b001 << 6,
+            Movem => 0b0100_1_0_001 << 7,
+            Movep => 0b1_0_0_001 << 3,
+            MoveQ => 0b0111 << 12,
+            MulDiv(format) => *format,
+            Nbcd => 0b0100_100_000 << 6,
+            NoOperands(data) => *data,
 
             OrAnd(format) => match format {
                 false => 0b1000 << 12,
                 true  => 0b1100 << 12,
             },
 
-            MoveQ => 0b0111 << 12,
-
-            Rotation(_, _) => 0b1110 << 12,
-
-            Lea  => 0b0100_000_111 << 6,
-            Chk  => 0b0100_000_110 << 6,
-            Exg  => 0b1100_000_1 << 8,
-            Tst  => 0b0100_1010 << 8,
-            Ext  => 0b0100_100_0_1 << 7,
-            Swap => 0b0100_100_001_000 << 3,
-            Unlk => 0b0100_111001011 << 3,
-            Link => 0b0100_111001010 << 3,
-            Trap => 0b0100_11100100 << 4,
-            Tas  => 0b0100_101011 << 6,
-            Stop => 0b0100_111001110010,
             Pea  => 0b0100_100_001 << 6,
-
-            Cmp  => 0b1011 << 12,
-            Cmpa => 0b1011_000_0_11 << 6,
-            Cmpm => 0b1011_000_1_00_001 << 3,
-
+            Rotation(_, _) => 0b1110 << 12,
             Scc(cond) => (0b0101_0000_11 << 6) | ((*cond as u16) << 8),
-            Nbcd => 0b0100_100_000 << 6,
-            MulDiv(format) => *format,
-            Eor => 0b1011_000_1 << 8,
-            Dbcc(cond) => (0b0101_0000_11_001 << 3) | ((*cond as u16) << 8),
-            Movep => 0b1_0_0_001 << 3,
-            Movem => 0b0100_1_0_001 << 7,
+            Stop => 0b0100_111001110010,
+            Swap => 0b0100_100_001_000 << 3,
+            Tas  => 0b0100_101011 << 6,
+            Trap => 0b0100_11100100 << 4,
+            Tst  => 0b0100_1010 << 8,
+            Unlk => 0b0100_111001011 << 3,
 
             Data(_, _) => 0, //unused
         }
@@ -266,6 +262,8 @@ impl OpType {
             "movep" => Movep,
             "movem" => Movem,
 
+            "bkpt" => Bkpt,
+
             _ => return Err(Log::InvalidOp),
         })
     }
@@ -284,7 +282,7 @@ impl OpType {
             AddSub(_) | AddSubQ(_) | AddSubX(_) | Cmp | Cmpm | Eor | Immediates(_) |
             Misc1(_) | Move | OrAnd(_) | Rotation(_, _) | Tst => BWL,
 
-            Jump(_) | NoOperands(_) | Stop | Trap | Unlk => Unsized,
+            Jump(_) | NoOperands(_) | Stop | Trap | Unlk | Bkpt => Unsized,
 
             Bcd(_) | Nbcd | Scc(_) | Tas => BU,
             Dbcc(_) | Swap => WU,
@@ -316,7 +314,7 @@ impl OpType {
             Ext | Swap                     => [Some(DataRegister), None],
             Unlk                           => [Some(AddressRegister), None],
             Link                           => [Some(AddressRegister), Some(Immediate)],
-            Trap                           => [Some(DataQuick), None],
+            Trap | Bkpt                    => [Some(DataQuick), None],
             Stop                           => [Some(Immediate), None],
             Cmp                            => [Some(All), Some(DataRegister)],
             Cmpm                           => [Some(AddressPostincrement), Some(AddressPostincrement)],
