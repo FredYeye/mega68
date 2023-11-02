@@ -18,14 +18,23 @@ mega68 [in_file] [out_file]
 
 ## Number Literals
 
-Literals can be in decimal, hexadecimal and binary. Hex values use the `0x` prefix and binary uses `0b`. Negative values are also accepted (for decimal only).
+Literals can be in decimal, hexadecimal and binary. Hex values use the `0x` prefix and binary uses `0b`.
 ```
 d16 36274      ;decimal
-d16 -6         ;decimal (negative)
 d32 0xF3576ACE ;hex
 d08 0b10001001 ;binary
 ```
 ---
+
+## Expressions
+
+Math expressions can be used to define values.
+At present, only addition and subtraction are implemented.
+```
+!offset = 0x20
+
+move.b #0x20 + 2, (!offset - 10, A5)
+```
 
 ## Formatting
 

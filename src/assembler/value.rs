@@ -42,18 +42,42 @@ impl Value {
                     for idx in 0 .. values2.len() {
                         match values2[idx].to_owned() {
                             Value::Operator(op) => match op {
-                                Operator::Add | Operator::Sub => {
+                                Operator::Add => {
                                     if idx != 0 && idx < last {
                                         let second = values2.remove(idx + 1).resolve_value(labels, defines)?;
                                         let first = values2.remove(idx - 1).resolve_value(labels, defines)?;
-
-                                        let result = match op {
-                                            Operator::Add => first.wrapping_add(second),
-                                            Operator::Sub => first.wrapping_sub(second),
-                                        };
-
+                                        let result = first.wrapping_add(second);
                                         values2[idx - 1] = Value::Number(result);
                                         break;
+                                    } else {
+                                        todo!()
+                                    }
+                                }
+
+                                Operator::Sub => {
+                                    let is_operator = |x: &Value| -> bool {
+                                        match x {
+                                            Value::Operator(_) => true,
+                                            _ => false,
+                                        }
+                                    };
+
+                                    if idx < last {
+                                        if idx == 0 || is_operator(&values2[idx - 1]) {
+                                            //unary operator -
+                                            let val = values2.remove(idx + 1).resolve_value(labels, defines)?;
+                                            let val2 = -(val as i64);
+                                            values2[idx] = Value::Number(val2 as u64);
+                                            break;
+                                        } else { //might need to put conditions here
+                                            let second = values2.remove(idx + 1).resolve_value(labels, defines)?;
+                                            let first = values2.remove(idx - 1).resolve_value(labels, defines)?;
+                                            let result = first.wrapping_sub(second);
+                                            values2[idx - 1] = Value::Number(result);
+                                            break;
+                                        }
+                                    } else {
+                                        todo!()
                                     }
                                 }
                             }
@@ -71,9 +95,6 @@ impl Value {
     }
 
     pub fn new(token: &str, last_label: &str) -> Value {
-        //todo: remove empty strings from proper_substrings
-        //todo: - can be an operator or a negative number, handle this case
-
         //split strings on operators / other
         let substrings: Vec<&str> = token.split_inclusive(['+', '-']).collect();
         let mut proper_substrings = Vec::new();
@@ -85,6 +106,9 @@ impl Value {
         }
 
         proper_substrings.push(substrings[substrings.len() - 1].trim());
+        proper_substrings.retain(|&s| !s.is_empty());
+
+        println!("{:?}", proper_substrings);
 
         let mut values = Vec::new();
         for &sub in &proper_substrings {
