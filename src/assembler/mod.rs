@@ -307,6 +307,15 @@ impl Assembler {
                 }
             }
 
+            Rtd => {
+                match self.cpu_type {
+                    CpuType::MC68000 => return Err(Log::UnsupportedInstruction),
+                    CpuType::MC68010 => {
+                        vec![op.op_type.format(), ea_a2[0]]
+                    }
+                }
+            }
+
             NoOperands(_) => vec![op.op_type.format()],
 
             Immediates(_) => {

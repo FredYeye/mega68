@@ -36,7 +36,7 @@ pub enum AddressingMode {
     AbsoluteLong(Value),
     Immediate(OpSize, Value),
 
-    BranchDisplacement(OpSize, Value),
+    BranchDisplacement(OpSize, Value), //also used for other displacement (rtd)
     RegisterList(u16),
     DataQuick(Value),
 
@@ -292,6 +292,8 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
         Ok( match opcode {
             OpType::MoveQ | OpType::Rotation(_, _) | OpType::AddSubQ(_) |
             OpType::Trap | OpType::Bkpt => DataQuick(val),
+
+            OpType::Rtd => BranchDisplacement(OpSize::W, val),
             _ => Immediate(size, val),
         })
     } else if let Some(predec) = token.strip_prefix("-(A") {

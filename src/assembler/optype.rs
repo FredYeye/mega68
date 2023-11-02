@@ -38,6 +38,7 @@ pub enum OpType {
     OrAnd(bool), //false = or, true = and
     Pea,
     Rotation(u8, bool),
+    Rtd,
     Scc(u8),
     Stop,
     Swap,
@@ -106,6 +107,7 @@ impl OpType {
 
             Pea  => 0b0100_100_001 << 6,
             Rotation(_, _) => 0b1110 << 12,
+            Rtd => 0b0100111001110100,
             Scc(cond) => (0b0101_0000_11 << 6) | ((*cond as u16) << 8),
             Stop => 0b0100_111001110010,
             Swap => 0b0100_100_001_000 << 3,
@@ -263,6 +265,7 @@ impl OpType {
             "movem" => Movem,
 
             "bkpt" => Bkpt,
+            "rtd" => Rtd,
 
             _ => return Err(Log::InvalidOp),
         })
@@ -282,7 +285,7 @@ impl OpType {
             AddSub(_) | AddSubQ(_) | AddSubX(_) | Cmp | Cmpm | Eor | Immediates(_) |
             Misc1(_) | Move | OrAnd(_) | Rotation(_, _) | Tst => BWL,
 
-            Jump(_) | NoOperands(_) | Stop | Trap | Unlk | Bkpt => Unsized,
+            Jump(_) | NoOperands(_) | Stop | Trap | Unlk | Bkpt | Rtd => Unsized,
 
             Bcd(_) | Nbcd | Scc(_) | Tas => BU,
             Dbcc(_) | Swap => WU,
@@ -302,7 +305,7 @@ impl OpType {
         use OpType::*;
 
         match self {
-            Branch(_)                      => [Some(Displacement), None],
+            Branch(_) | Rtd                => [Some(Displacement), None],
             NoOperands(_)                  => [None, None],
             AddSubA(_) | MoveA | Cmpa      => [Some(All), Some(AddressRegister)],
             AddSubQ(_)                     => [Some(DataQuick), Some(Alterable)],
