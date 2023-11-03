@@ -368,8 +368,10 @@ impl OpType {
 
             Move => {
                 match modes[0] {
+                    AddressingMode::CCR => [Some(CCR), Some(DataAlterable)],
                     AddressingMode::SR => [Some(SR), Some(DataAlterable)],
                     AddressingMode::USP => [Some(USP), Some(DataRegister)],
+
                     _ => {
                         match modes[1] {
                             AddressingMode::CCR => [Some(DataAddressing), Some(CCR)],

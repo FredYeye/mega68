@@ -413,6 +413,21 @@ impl Assembler {
 
             Move => {
                 match ea_a1 {
+                    CCR_MASK => {
+                        match self.cpu_type {
+                            CpuType::MC68000 => return Err(Log::UnsupportedInstruction),
+                            CpuType::MC68010 => {
+                                if op.op_size == W {
+                                    let mut format = vec![(0b0100_0010_11 << 6) | ea_b1];
+                                    format.extend(ea_b2);
+                                    format
+                                } else {
+                                    todo!("error")
+                                }
+                            }
+                        }
+                    }
+
                     SR_MASK => {
                         if op.op_size == W {
                             let mut format = vec![(0b0100_0000_11 << 6) | ea_b1];
@@ -431,7 +446,7 @@ impl Assembler {
                     _ => {
                         match ea_b1 {
                             CCR_MASK => {
-                                if op.op_size == B {
+                                if op.op_size == W {
                                     let mut format = vec![(0b0100_0100_11 << 6) | ea_a1];
                                     format.extend(ea_a2);
                                     format
