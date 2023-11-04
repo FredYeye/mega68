@@ -6,7 +6,7 @@ mod optype;
 mod value;
 mod constants;
 
-use crate::{logging::Log, assembler::constants::*};
+use crate::{logging::Log, assembler::{constants::*, addressing::ControlRegister}};
 
 use addressing::AddressingMode;
 use opsize::OpSize;
@@ -491,6 +491,64 @@ impl Assembler {
                 let mut format = vec![op.op_size.size_move() | reg | op.op_type.format() | ea_a1];
                 format.extend(ea_a2);
                 format
+            }
+
+            Movec => {
+                let (dr, rn, cr) = match &op.operands[0] {
+                    AddressingMode::ControlReg(cr) => (0, 1, cr.format()),
+                    AddressingMode::USP => (0, 1, ControlRegister::Usp.format()),
+                    
+                    _ => {
+                        let cr = match &op.operands[1] {
+                            AddressingMode::ControlReg(cr) => cr,
+                            AddressingMode::USP => &ControlRegister::Usp,
+                            _ => unreachable!(),
+                        };
+
+                        (1, 0, cr.format())
+                    }
+                };
+
+                let (ad, reg) = match op.operands[rn] {
+                    AddressingMode::DataRegister(r) => (0 << 15, (r as u16) << 12),
+                    AddressingMode::AddressRegister(r) => (1 << 15, (r as u16) << 12),
+                    _ => unreachable!(),
+                };
+
+                vec![
+                    op.op_type.format() | dr,
+                    ad | reg | cr,
+                ]
+            }
+
+            Moves => {
+                match self.cpu_type {
+                    CpuType::MC68000 => return Err(Log::UnsupportedInstruction),
+                    CpuType::MC68010 => {
+                        //todo: use op.operands instead!
+                        let (ad, reg, dr) = if ea_a1 & MODE_MASK == DATA_REGISTER_MASK {
+                            (0 << 15, (ea_a1 & 111) << 12, 1 << 11)
+                        } else if ea_a1 & MODE_MASK == ADDRESS_REGISTER_MASK {
+                            (1 << 15, (ea_a1 & 111) << 12, 1 << 11)
+                        } else if ea_b1 & MODE_MASK == DATA_REGISTER_MASK {
+                            (0 << 15, (ea_b1 & 111) << 12, 0 << 11)
+                        } else { //ea_b1 & MODE_MASK == ADDRESS_REGISTER_MASK
+                            (1 << 15, (ea_b1 & 111) << 12, 0 << 11)
+                        };
+        
+                        let (ea, ea2) = match dr == 0 {
+                            true  => (ea_a1, ea_a2),
+                            false => (ea_b1, ea_b2),
+                        };
+        
+                        let mut format = vec![
+                            op.op_type.format() | op.op_size.size1() | ea,
+                            ad | reg | dr,
+                        ];
+                        format.extend(ea2);
+                        format
+                    }
+                }
             }
 
             BitManip(_) => {

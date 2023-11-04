@@ -7,6 +7,22 @@ use crate::logging::Log;
 use super::{OpSize, OpType, value::Value, constants::*};
 
 #[derive(Debug, PartialEq)]
+pub enum ControlRegister {
+    Sfc, Dfc, Usp, Vbr, //68010 also put usp here?
+}
+
+impl ControlRegister {
+    pub fn format(&self) -> u16 {
+        match self {
+            ControlRegister::Sfc => 0x000,
+            ControlRegister::Dfc => 0x001,
+            ControlRegister::Usp => 0x800,
+            ControlRegister::Vbr => 0x801,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
 pub enum RegType {
     Dn,
     An,
@@ -43,6 +59,8 @@ pub enum AddressingMode {
     CCR,
     SR,
     USP,
+
+    ControlReg(ControlRegister),
 
     Empty,
 }
@@ -93,6 +111,7 @@ impl AddressingMode {
             Self::CCR                         => 0b0_001_000_000000000000,
             Self::SR                          => 0b0_010_000_000000000000,
             Self::USP                         => 0b0_100_000_000000000000,
+            Self::ControlReg(_)               => 0b1_000_000_000000000000,
             Self::Empty                       => 0b0_000_000_000000000000,
         }
     }
@@ -194,6 +213,9 @@ impl AddressingMode {
             Self::CCR => (CCR_MASK >> 3, 0, vec![]),
             Self::SR => (SR_MASK >> 3, 0, vec![]),
             Self::USP => (USP_MASK >> 3, 0, vec![]),
+
+            Self::ControlReg(reg) => (0, 0, vec![]),
+
             Self::RegisterList(mask) => (MOVEM_MASK >> 3, 0, vec![*mask]),
             Self::DataQuick(imm) => (0b111, 0b100, vec![(imm.resolve_value(labels, defines)? & 0xFF) as u16]), //make dataquick look like immediate
             Self::Empty => (0b111, 0b111, vec![]),
@@ -226,6 +248,7 @@ pub enum AddressingList {
     CCR,
     SR,
     USP,
+    ControlRegister,
 
     RegisterList,
     MovemSrc,
@@ -257,6 +280,7 @@ impl AddressingList {
             Self::CCR                   => 0b0_001_000_000000000000,
             Self::SR                    => 0b0_010_000_000000000000,
             Self::USP                   => 0b0_100_000_000000000000,
+            Self::ControlRegister       => 0b1_100_000_000000000000,
 
             Self::RegisterList          => 0b0_000_010_000000000000,
             Self::MovemSrc              => 0b0_000_000_011001101100,
@@ -284,6 +308,17 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
                 })
             }
         }
+    }
+
+    match token.to_uppercase().as_str() {
+        "CCR" => return Ok(CCR),
+        "SR"  => return Ok(SR),
+        "USP" => return Ok(USP),
+
+        "SFC" => return Ok(ControlReg(ControlRegister::Sfc)),
+        "DFC" => return Ok(ControlReg(ControlRegister::Dfc)),
+        "VBR" => return Ok(ControlReg(ControlRegister::Vbr)),
+        _ => (),
     }
 
     if let Some(imm) = token.strip_prefix('#') {
@@ -379,13 +414,7 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
         } else {
             todo!("error")
         }
-    } else if token.to_uppercase() == "CCR" {
-        Ok(CCR)
-    } else if token.to_uppercase() == "SR" {
-        Ok(SR)
-    } else if token.to_uppercase() == "USP" {
-        Ok(USP)
-    } else if let Some(abs_w) = token.strip_suffix(".w") {
+    }  else if let Some(abs_w) = token.strip_suffix(".w") {
         Ok(AbsoluteShort(Value::new(abs_w, last_label)))
     } else if let Some(abs_l) = token.strip_suffix(".l") {
         Ok(AbsoluteLong(Value::new(abs_l, last_label)))

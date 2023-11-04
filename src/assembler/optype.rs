@@ -29,9 +29,11 @@ pub enum OpType {
     Misc1(u8),
     Move,
     MoveA,
+    Movec,
     Movem,
     Movep,
     MoveQ,
+    Moves,
     MulDiv(u16),
     Nbcd,
     NoOperands(u16),
@@ -93,9 +95,11 @@ impl OpType {
             Misc1(format) => (*format as u16) << 8,
             Move => 0,
             MoveA => 0b001 << 6,
+            Movec => 0b010011100111101 << 1,
             Movem => 0b0100_1_0_001 << 7,
             Movep => 0b1_0_0_001 << 3,
             MoveQ => 0b0111 << 12,
+            Moves => 0b0000_1110 << 8,
             MulDiv(format) => *format,
             Nbcd => 0b0100_100_000 << 6,
             NoOperands(data) => *data,
@@ -266,6 +270,8 @@ impl OpType {
 
             "bkpt" => Bkpt,
             "rtd" => Rtd,
+            "movec" => Movec,
+            "moves" => Moves,
 
             _ => return Err(Log::InvalidOp),
         })
@@ -283,13 +289,13 @@ impl OpType {
             AddSubA(_) | Cmpa | Ext | MoveA | Movem | Movep => WL,
 
             AddSub(_) | AddSubQ(_) | AddSubX(_) | Cmp | Cmpm | Eor | Immediates(_) |
-            Misc1(_) | Move | OrAnd(_) | Rotation(_, _) | Tst => BWL,
+            Misc1(_) | Move | OrAnd(_) | Rotation(_, _) | Tst | Moves => BWL,
 
             Jump(_) | NoOperands(_) | Stop | Trap | Unlk | Bkpt | Rtd => Unsized,
 
             Bcd(_) | Nbcd | Scc(_) | Tas => BU,
             Dbcc(_) | Swap => WU,
-            Exg | Lea | MoveQ | Pea => LU,
+            Exg | Lea | MoveQ | Pea | Movec => LU,
 
             Data(_, _) => Unsized, //unused
         };
@@ -381,6 +387,16 @@ impl OpType {
                         }
                     }
                 }
+            }
+
+            Movec => match modes[0] {
+                AddressingMode::DataRegister(_) | AddressingMode::AddressRegister(_) => [Some(Register), Some(ControlRegister)],
+                _ => [Some(ControlRegister), Some(Register)],
+            }
+
+            Moves => match modes[0] {
+                AddressingMode::DataRegister(_) | AddressingMode::AddressRegister(_) => [Some(Register), Some(MemoryAlterable)],
+                _ => [Some(MemoryAlterable), Some(Register)],
             }
 
             Immediates(imm) => {
