@@ -494,31 +494,36 @@ impl Assembler {
             }
 
             Movec => {
-                let (dr, rn, cr) = match &op.operands[0] {
-                    AddressingMode::ControlReg(cr) => (0, 1, cr.format()),
-                    AddressingMode::USP => (0, 1, ControlRegister::Usp.format()),
-                    
-                    _ => {
-                        let cr = match &op.operands[1] {
-                            AddressingMode::ControlReg(cr) => cr,
-                            AddressingMode::USP => &ControlRegister::Usp,
+                match self.cpu_type {
+                    CpuType::MC68000 => return Err(Log::UnsupportedInstruction),
+                    CpuType::MC68010 => {
+                        let (dr, rn, cr) = match &op.operands[0] {
+                            AddressingMode::ControlReg(cr) => (0, 1, cr.format()),
+                            AddressingMode::USP => (0, 1, ControlRegister::Usp.format()),
+                            
+                            _ => {
+                                let cr = match &op.operands[1] {
+                                    AddressingMode::ControlReg(cr) => cr,
+                                    AddressingMode::USP => &ControlRegister::Usp,
+                                    _ => unreachable!(),
+                                };
+        
+                                (1, 0, cr.format())
+                            }
+                        };
+        
+                        let (ad, reg) = match op.operands[rn] {
+                            AddressingMode::DataRegister(r) => (0 << 15, (r as u16) << 12),
+                            AddressingMode::AddressRegister(r) => (1 << 15, (r as u16) << 12),
                             _ => unreachable!(),
                         };
-
-                        (1, 0, cr.format())
+        
+                        vec![
+                            op.op_type.format() | dr,
+                            ad | reg | cr,
+                        ]
                     }
-                };
-
-                let (ad, reg) = match op.operands[rn] {
-                    AddressingMode::DataRegister(r) => (0 << 15, (r as u16) << 12),
-                    AddressingMode::AddressRegister(r) => (1 << 15, (r as u16) << 12),
-                    _ => unreachable!(),
-                };
-
-                vec![
-                    op.op_type.format() | dr,
-                    ad | reg | cr,
-                ]
+                }
             }
 
             Moves => {

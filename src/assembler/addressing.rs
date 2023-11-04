@@ -328,6 +328,7 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
             OpType::MoveQ | OpType::Rotation(_, _) | OpType::AddSubQ(_) |
             OpType::Trap | OpType::Bkpt => DataQuick(val),
 
+            //todo: rtd does take a signed 16-bit disp, but... never seen it being used so not sure if this is the right thing to do
             OpType::Rtd => BranchDisplacement(OpSize::W, val),
             _ => Immediate(size, val),
         })
