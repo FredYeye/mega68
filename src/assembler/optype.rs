@@ -311,7 +311,7 @@ impl OpType {
         use OpType::*;
 
         match self {
-            Branch(_) | Rtd                => [Some(Displacement), None],
+            Branch(_)                      => [Some(Displacement), None],
             NoOperands(_)                  => [None, None],
             AddSubA(_) | MoveA | Cmpa      => [Some(All), Some(AddressRegister)],
             AddSubQ(_)                     => [Some(DataQuick), Some(Alterable)],
@@ -324,7 +324,7 @@ impl OpType {
             Unlk                           => [Some(AddressRegister), None],
             Link                           => [Some(AddressRegister), Some(Immediate)],
             Trap | Bkpt                    => [Some(DataQuick), None],
-            Stop                           => [Some(Immediate), None],
+            Stop | Rtd                     => [Some(Immediate), None],
             Cmp                            => [Some(All), Some(DataRegister)],
             Cmpm                           => [Some(AddressPostincrement), Some(AddressPostincrement)],
             MulDiv(_)                      => [Some(DataAlterable), Some(DataRegister)],

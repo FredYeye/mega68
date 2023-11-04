@@ -52,7 +52,7 @@ pub enum AddressingMode {
     AbsoluteLong(Value),
     Immediate(OpSize, Value),
 
-    BranchDisplacement(OpSize, Value), //also used for other displacement (rtd)
+    BranchDisplacement(OpSize, Value),
     RegisterList(u16),
     DataQuick(Value),
 
@@ -327,9 +327,7 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
         Ok( match opcode {
             OpType::MoveQ | OpType::Rotation(_, _) | OpType::AddSubQ(_) |
             OpType::Trap | OpType::Bkpt => DataQuick(val),
-
-            //todo: rtd does take a signed 16-bit disp, but... never seen it being used so not sure if this is the right thing to do
-            OpType::Rtd => BranchDisplacement(OpSize::W, val),
+            OpType::Rtd => Immediate(OpSize::W, val),
             _ => Immediate(size, val),
         })
     } else if let Some(predec) = token.strip_prefix("-(A") {
