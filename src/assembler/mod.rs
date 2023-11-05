@@ -36,6 +36,7 @@ struct Decoded { //todo: rename
 pub enum CpuType {
     #[default] MC68000,
     MC68010,
+    MC68020,
 }
 
 #[derive(Debug)]
@@ -209,11 +210,16 @@ impl Assembler {
             OpSize::Unsized
         };
 
+        let extended_addressing = match self.cpu_type {
+            CpuType::MC68000 | CpuType::MC68010 => false,
+            _ => true,
+        };
+
         let mut modes = [AddressingMode::Empty, AddressingMode::Empty];
 
         for (x, mode) in modes.iter_mut().enumerate() {
             *mode = match &tokens.operands[x] {
-                Some(operand) => addressing::determine_addressing_mode(operand, &opcode, size, &self.last_label)?,
+                Some(operand) => addressing::determine_addressing_mode(operand, &opcode, size, &self.last_label, extended_addressing)?,
                 None => AddressingMode::Empty,
             };
 
@@ -310,7 +316,7 @@ impl Assembler {
             Rtd => {
                 match self.cpu_type {
                     CpuType::MC68000 => return Err(Log::UnsupportedInstruction),
-                    CpuType::MC68010 => {
+                    _ => {
                         vec![op.op_type.format(), ea_a2[0]]
                     }
                 }
@@ -416,7 +422,7 @@ impl Assembler {
                     CCR_MASK => {
                         match self.cpu_type {
                             CpuType::MC68000 => return Err(Log::UnsupportedInstruction),
-                            CpuType::MC68010 => {
+                            _ => {
                                 if op.op_size == W {
                                     let mut format = vec![(0b0100_0010_11 << 6) | ea_b1];
                                     format.extend(ea_b2);
@@ -496,7 +502,7 @@ impl Assembler {
             Movec => {
                 match self.cpu_type {
                     CpuType::MC68000 => return Err(Log::UnsupportedInstruction),
-                    CpuType::MC68010 => {
+                    _ => {
                         let (dr, rn, cr) = match &op.operands[0] {
                             AddressingMode::ControlReg(cr) => (0, 1, cr.format()),
                             AddressingMode::USP => (0, 1, ControlRegister::Usp.format()),
@@ -529,7 +535,7 @@ impl Assembler {
             Moves => {
                 match self.cpu_type {
                     CpuType::MC68000 => return Err(Log::UnsupportedInstruction),
-                    CpuType::MC68010 => {
+                    _ => {
                         //todo: use op.operands instead!
                         let (ad, reg, dr) = if ea_a1 & MODE_MASK == DATA_REGISTER_MASK {
                             (0 << 15, (ea_a1 & 111) << 12, 1 << 11)
@@ -684,7 +690,7 @@ impl Assembler {
             Bkpt => {
                 match self.cpu_type {
                     CpuType::MC68000 => return Err(Log::UnsupportedInstruction),
-                    CpuType::MC68010 => {
+                    _ => {
                         let vector = ea_a2[0] & 0b111;
                         vec![op.op_type.format() | vector]
                     }
@@ -797,12 +803,8 @@ fn parse_n(token: &str) -> Result<u64, Log> {
         (10, 0)
     };
 
-    match i64::from_str_radix(&token[offset_begin..token.len()], radix) {
-        Ok(val) => Ok(val as u64),
-
-        Err(_) => match u64::from_str_radix(&token[offset_begin..token.len()], radix) {
-            Ok(val) => Ok(val),
-            Err(_) => Err(Log::InvalidNumber),
-        }
+    match u64::from_str_radix(&token[offset_begin..token.len()], radix) {
+        Ok(val) => Ok(val),
+        Err(_) => Err(Log::InvalidNumber),
     }
 }

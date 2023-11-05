@@ -28,6 +28,14 @@ pub enum RegType {
     An,
 }
 
+#[derive(Debug, PartialEq)]
+pub enum ExtensionWord {
+    // D/A, reg, W/L, scale, displacement
+    Brief(RegType, u8, bool, u8, Value),
+    // D/A, reg, W/L, scale, BS, IS, BD size, I/IS
+    Full(RegType, u8, bool, u8, bool, bool, u8, u8),
+}
+
 impl RegType {
     fn value(&self) -> u16 {
         match self {
@@ -45,9 +53,9 @@ pub enum AddressingMode {
     AddressPostincrement(u8),
     AddressPredecrement(u8),
     AddressDisplacement(Value, u8),
-    AddressIndex(Value, u8, u8, RegType, bool),
+    AddressIndex(ExtensionWord, u8),
     PCDisplacement(Value),
-    PCIndex(Value, u8, RegType, bool), // disp, Xn, reg type, reg size
+    PCIndex(ExtensionWord),
     AbsoluteShort(Value),
     AbsoluteLong(Value),
     Immediate(OpSize, Value),
@@ -71,8 +79,8 @@ impl AddressingMode {
 
         for mode in modes {
             count += match mode {
-                Self::AddressDisplacement(_, _) | Self::AddressIndex(_, _, _, _, _) |
-                Self::PCDisplacement(_)         | Self::PCIndex(_, _, _, _) |
+                Self::AddressDisplacement(_, _) | Self::AddressIndex(_, _) |
+                Self::PCDisplacement(_)         | Self::PCIndex(_) |
                 Self::AbsoluteShort(_)          | Self::RegisterList(_) => 2,
 
                 Self::AbsoluteLong(_) => 4,
@@ -99,9 +107,9 @@ impl AddressingMode {
             Self::AddressPostincrement(_)     => 0b0_000_000_000000001000,
             Self::AddressPredecrement(_)      => 0b0_000_000_000000010000,
             Self::AddressDisplacement(_, _)   => 0b0_000_000_000000100000,
-            Self::AddressIndex(_, _, _, _, _) => 0b0_000_000_000001000000,
+            Self::AddressIndex(_, _)          => 0b0_000_000_000001000000,
             Self::PCDisplacement(_)           => 0b0_000_000_000010000000,
-            Self::PCIndex(_, _, _, _)         => 0b0_000_000_000100000000,
+            Self::PCIndex(_)                  => 0b0_000_000_000100000000,
             Self::AbsoluteShort(_)            => 0b0_000_000_001000000000,
             Self::AbsoluteLong(_)             => 0b0_000_000_010000000000,
             Self::Immediate(_, _)             => 0b0_000_000_100000000000,
@@ -134,17 +142,24 @@ impl AddressingMode {
                 (0b101, *reg, vec![disp2 as u16])
             }
 
-            Self::AddressIndex(disp, reg_a, reg, reg_type, reg_size) => {
-                let mut disp2 = disp.resolve_value(labels, defines)? as i16;
-                if let Value::Label(_) = disp {
-                    disp2 -= location as i16 + 2;
-                }
+            Self::AddressIndex(ext_word, an) => {
+                match ext_word {
+                    ExtensionWord::Brief(reg_type, reg, size, scale, displacement) => {
+                        //todo: check if disp is out of range?
+                        let mut disp2 = displacement.resolve_value(labels, defines)? as i16;
+                        if let Value::Label(_) = displacement {
+                            disp2 -= location as i16 + 2;
+                        }
 
-                (
-                    0b110,
-                    *reg_a,
-                    vec![(reg_type.value() << 15) | ((*reg as u16) << 12) | ((*reg_size as u16) << 11) | disp2 as u16],
-                )
+                        (
+                            0b110,
+                            *an,
+                            vec![(reg_type.value() << 15) | ((*reg as u16) << 12) | ((*size as u16) << 11) | ((*scale as u16) << 9) | ((disp2 as u16) & 0xFF)],
+                        )
+                    }
+
+                    ExtensionWord::Full(_, _, _, _, _, _, _, _) => todo!(),
+                }
             }
 
             Self::PCDisplacement(disp) => {
@@ -156,17 +171,24 @@ impl AddressingMode {
                 (0b111, 0b010, vec![disp2 as u16])
             }
 
-            Self::PCIndex(disp, reg, reg_type, reg_size) => {
-                let mut disp2 = disp.resolve_value(labels, defines)? as i16;
-                if let Value::Label(_) = disp {
-                    disp2 -= location as i16 + 2;
-                }
+            Self::PCIndex(ext_word) => {
+                match ext_word {
+                    ExtensionWord::Brief(reg_type, reg, size, scale, displacement) => {
+                        //todo: check if disp is out of range?
+                        let mut disp2 = displacement.resolve_value(labels, defines)? as i16;
+                        if let Value::Label(_) = displacement {
+                            disp2 -= location as i16 + 2;
+                        }
+        
+                        (
+                            0b111,
+                            0b011,
+                            vec![(reg_type.value() << 15) | ((*reg as u16) << 12) | ((*reg as u16) << 11) | ((*scale as u16) << 9) | ((disp2 as u16) & 0xFF)],
+                        )
+                    }
 
-                (
-                    0b111,
-                    0b011,
-                    vec![(reg_type.value() << 15) | ((*reg as u16) << 12) | ((*reg_size as u16) << 11) | disp2 as u16],
-                )
+                    ExtensionWord::Full(_, _, _, _, _, _, _, _) => todo!(),
+                }
             }
 
             Self::AbsoluteShort(value) => {
@@ -291,7 +313,7 @@ impl AddressingList {
     }
 }
 
-pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, last_label: &str) -> Result<AddressingMode, Log> {
+pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, last_label: &str, extended_addressing: bool) -> Result<AddressingMode, Log> {
     use AddressingMode::*;
 
     if token.len() == 2 {
@@ -373,38 +395,82 @@ pub fn determine_addressing_mode(token: &str, opcode: &OpType, size: OpSize, las
 
                     let third = paren_token[commas[1].0 + 1..paren_token.len()].trim();
 
-                    let (reg_type, reg_num, reg_size) = if third.len() == 4 {
-                        (
-                            if third.starts_with('D') {
-                                RegType::Dn
-                            } else if third.starts_with('A') {
-                                RegType::An
-                            } else {
-                                todo!("error")
-                            },
-    
-                            parse_reg(&third[1..=1])?,
+                    // more like, if scale detected, check there
+                    // if !extended_addressing && third.len() != 4 {
+                    //     todo!("error")
+                    // }
 
-                            if third.to_lowercase().ends_with(".w") {
-                                false
-                            } else if third.to_lowercase().ends_with(".l") {
-                                true
-                            } else {
-                                return Err(Log::IndexRegisterInvalidSize)
-                            },
-                        )
+                    let reg_type = if third.starts_with('D') {
+                        RegType::Dn
+                    } else if third.starts_with('A') {
+                        RegType::An
                     } else {
                         todo!("error")
                     };
 
-                    let second = paren_token[commas[0].0 + 1..commas[1].0].trim();
+                    let reg_num = parse_reg(&third[1..=1])?;
 
-                    if second == "PC" {
-                        Ok(PCIndex(disp, reg_num, reg_type, reg_size))
-                    } else if second.len() == 2 && second.starts_with('A') {
-                        Ok(AddressIndex(disp, parse_reg(&second[1..=1])?, reg_num, reg_type, reg_size))
+                    //todo: refactor once all new addressing is in
+
+                    if !extended_addressing {
+                        let reg_size = if third.to_lowercase().ends_with(".w") {
+                            false
+                        } else if third.to_lowercase().ends_with(".l") {
+                            true
+                        } else {
+                            return Err(Log::IndexRegisterInvalidSize)
+                        };
+    
+                        let second = paren_token[commas[0].0 + 1..commas[1].0].trim();
+    
+                        if second == "PC" {
+                            //todo: scale hardcoded to 0!
+                            Ok(PCIndex(ExtensionWord::Brief(reg_type, reg_num, reg_size, 0, disp)))
+                        } else if second.len() == 2 && second.starts_with('A') {
+                            //todo: scale hardcoded to 0!
+                            Ok(AddressIndex(ExtensionWord::Brief(reg_type, reg_num, reg_size, 0, disp), parse_reg(&second[1..=1])?))
+                        } else {
+                            todo!("error")
+                        }
                     } else {
-                        todo!("error")
+                        let reg_size = if third[2..=3].to_lowercase() == ".w" {
+                            false
+                        } else if third[2..=3].to_lowercase() == ".l" {
+                            true
+                        } else {
+                            return Err(Log::IndexRegisterInvalidSize)
+                        };
+
+                        let mut scale = 1;
+                        match third.split_once('*') {
+                            Some((ind_reg, scale_str)) => { //todo: use ind_reg for something or ignore?
+                                match scale_str.trim().parse::<u8>() {
+                                    Ok(s) => {
+                                        match s {
+                                            1 => scale = 0,
+                                            2 => scale = 1,
+                                            4 => scale = 2,
+                                            8 => scale = 3,
+                                            _ => todo!("invalid scale"),
+                                        }
+                                    }
+
+                                    Err(_) => todo!("invalid scale"),
+                                }
+                            }
+
+                            None => (),
+                        }
+
+                        let second = paren_token[commas[0].0 + 1..commas[1].0].trim();
+    
+                        if second == "PC" {
+                            Ok(PCIndex(ExtensionWord::Brief(reg_type, reg_num, reg_size, scale, disp)))
+                        } else if second.len() == 2 && second.starts_with('A') {
+                            Ok(AddressIndex(ExtensionWord::Brief(reg_type, reg_num, reg_size, scale, disp), parse_reg(&second[1..=1])?))
+                        } else {
+                            todo!("error")
+                        }
                     }
                 }
 

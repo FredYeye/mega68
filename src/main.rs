@@ -1,25 +1,11 @@
-use clap::Parser;
-
 use assembler::CpuType;
+use clap::Parser;
+use cli_parse::Args;
 
 mod assembler;
 mod logging;
 mod tests;
-
-#[derive(Parser)]
-struct Args {
-    /// Path to file to assemble
-    #[arg(short, default_value = "code.asm")]
-    in_file: String,
-
-    /// Path to where to create assembled file. If none is specified, the in_file name will be used, adding or replacing an existing file extension with ".bin"
-    #[arg(short)]
-    out_file: Option<String>,
-
-    /// Valid options are "M68000", "M68010"
-    #[arg(short, default_value = "M68000")]
-    target_cpu: String,
-}
+mod cli_parse;
 
 fn main() {
     let args = Args::parse();
@@ -40,6 +26,7 @@ fn main() {
     let target_cpu = match args.target_cpu.as_str() {
         "M68000" => CpuType::MC68000,
         "M68010" => CpuType::MC68010,
+        "M68020" => CpuType::MC68020,
 
         _ => {
             println!("Invalid cpu type specified");
